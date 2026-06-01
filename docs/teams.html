@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Nite S6 — Teams</title>
+  <link rel="stylesheet" href="css/halo.css">
+  <style>
+    .team-color-bar { height: 3px; width: 100%; margin-bottom: 4px; }
+    .matchup-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .matchup-title {
+      font-family: var(--font-halo);
+      font-size: 1.1rem;
+      letter-spacing: .06em;
+      margin-bottom: 14px;
+    }
+    .matchup-vs {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .vs-team {
+      flex: 1;
+      text-align: center;
+    }
+    .vs-team .t-name {
+      font-family: var(--font-halo);
+      font-size: 1.4rem;
+      letter-spacing: .06em;
+    }
+    .vs-team .t-wins {
+      font-family: var(--font-halo);
+      font-size: 2.4rem;
+      line-height: 1;
+    }
+    .vs-team .t-pct {
+      font-size: .68rem;
+      letter-spacing: .15em;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .vs-divider {
+      font-family: var(--font-halo);
+      font-size: 1rem;
+      color: var(--text-dim);
+      letter-spacing: .2em;
+    }
+    .matchup-bar-bg { height: 10px; background: var(--border2); margin-top: 14px; position: relative; overflow: hidden; }
+    .matchup-bar-a { position: absolute; left: 0; top: 0; bottom: 0; transition: width .4s; }
+    .matchup-bar-b { position: absolute; right: 0; top: 0; bottom: 0; transition: width .4s; }
+  </style>
+</head>
+<body>
+<div id="nav"></div>
+<main>
+  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
+  <div id="content" style="display:none">
+    <h1 class="page-title">Team Stats</h1>
+    <p class="page-subtitle">FACTION PERFORMANCE — SEASON 6</p>
+
+    <div id="sh-matchups"></div>
+    <div id="matchups-section"></div>
+
+    <div id="sh-teams"></div>
+    <div class="chart-grid">
+      <div class="chart-box"><h3>WIN RATE BY TEAM</h3><canvas id="winpct-chart"></canvas></div>
+      <div class="chart-box"><h3>AVG KILLS BY TEAM</h3><canvas id="kills-chart"></canvas></div>
+    </div>
+
+    <div id="sh-tbl"></div>
+    <div class="box tbl-wrap">
+      <table id="teams-tbl">
+        <thead><tr>
+          <th>TEAM</th>
+          <th class="r">W</th>
+          <th class="r">L</th>
+          <th class="r">GAMES</th>
+          <th class="r">WIN%</th>
+          <th class="r">AVG KILLS</th>
+          <th class="r">AVG DEATHS</th>
+        </tr></thead>
+        <tbody id="teams-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+renderNav('teams.html');
+
+loadStats().then(data => {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const { teams, matchups } = data;
+
+  document.getElementById('sh-matchups').innerHTML = sectionHdr('MATCHUP RECORDS');
+  document.getElementById('sh-teams').innerHTML = sectionHdr('TEAM PERFORMANCE CHARTS');
+  document.getElementById('sh-tbl').innerHTML = sectionHdr('ALL TEAMS');
+
+  // Matchup cards
+  const muSection = document.getElementById('matchups-section');
+  muSection.innerHTML = Object.entries(matchups).map(([name, mu]) => {
+    const colorA = data.team_colors[mu.team_a] || '#aaa';
+    const colorB = data.team_colors[mu.team_b] || '#aaa';
+    const total = mu.games || 1;
+    const pctA = Math.round(mu.team_a_wins / total * 100);
+    const pctB = Math.round(mu.team_b_wins / total * 100);
+    return `
+    <div class="matchup-card">
+      <div class="matchup-title">${name} &nbsp;<span style="font-size:.7rem;color:var(--text-dim);letter-spacing:.2em">${mu.games} GAMES</span></div>
+      <div class="matchup-vs">
+        <div class="vs-team">
+          <div class="t-name" style="color:${colorA}">${mu.team_a}</div>
+          <div class="t-wins" style="color:${colorA};text-shadow:0 0 12px ${colorA}44">${mu.team_a_wins}</div>
+          <div class="t-pct">WINS</div>
+        </div>
+        <div class="vs-divider">VS</div>
+        <div class="vs-team">
+          <div class="t-name" style="color:${colorB}">${mu.team_b}</div>
+          <div class="t-wins" style="color:${colorB};text-shadow:0 0 12px ${colorB}44">${mu.team_b_wins}</div>
+          <div class="t-pct">WINS</div>
+        </div>
+      </div>
+      <div class="matchup-bar-bg">
+        <div class="matchup-bar-a" style="width:${pctA}%;background:${colorA};opacity:.7"></div>
+        <div class="matchup-bar-b" style="width:${pctB}%;background:${colorB};opacity:.7"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Team table — sorted by win %
+  const sortedTeams = Object.entries(teams).sort((a,b) => b[1].win_pct - a[1].win_pct);
+
+  document.getElementById('teams-body').innerHTML = sortedTeams.map(([name, t]) => {
+    const c = t.color || '#aaa';
+    return `<tr>
+      <td>${teamBadge(name, c)}</td>
+      <td class="r good">${t.wins}</td>
+      <td class="r bad">${t.losses}</td>
+      <td class="r dim">${t.games}</td>
+      <td class="r ${t.win_pct >= 50 ? 'good' : 'bad'}">${t.win_pct}%</td>
+      <td class="r">${t.avg_kills}</td>
+      <td class="r dim">${t.avg_deaths}</td>
+    </tr>`;
+  }).join('');
+
+  // Charts
+  const teamNames = sortedTeams.map(([n]) => n);
+  const teamColors = sortedTeams.map(([n, t]) => t.color || '#aaa');
+  const teamColorsBg = teamColors.map(c => c + '88');
+
+  makeChart('winpct-chart', 'bar', teamNames,
+    [{ data: sortedTeams.map(([,t]) => t.win_pct), backgroundColor: teamColorsBg, borderColor: teamColors, borderWidth: 1 }],
+    {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 10 }, callback: v => v + '%' },
+          grid: { color: 'rgba(26,58,68,.5)' },
+        },
+        x: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: 'rgba(26,58,68,.5)' } },
+      },
+    }
+  );
+
+  makeChart('kills-chart', 'bar', teamNames,
+    [{ data: sortedTeams.map(([,t]) => t.avg_kills), backgroundColor: teamColorsBg, borderColor: teamColors, borderWidth: 1 }],
+    { plugins: { legend: { display: false } } }
+  );
+});
+</script>
+</body>
+</html>

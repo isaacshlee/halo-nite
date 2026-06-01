@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Nite S6 — Players</title>
+  <link rel="stylesheet" href="css/halo.css">
+  <style>
+    .player-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .player-avatar {
+      width: 56px; height: 56px;
+      clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-halo);
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+    .player-header-info h2 {
+      font-family: var(--font-halo);
+      font-size: 1.6rem;
+      letter-spacing: .06em;
+      line-height: 1;
+    }
+    .player-header-info p {
+      font-size: .68rem;
+      letter-spacing: .2em;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+    .medal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .medal-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 4px 12px;
+      font-size: .72rem;
+      letter-spacing: .1em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .medal-chip .m-count {
+      font-family: var(--font-halo);
+      font-size: .9rem;
+      color: var(--teal);
+    }
+  </style>
+</head>
+<body>
+<div id="nav"></div>
+<main>
+  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
+  <div id="content" style="display:none">
+    <h1 class="page-title">Player Profiles</h1>
+    <p class="page-subtitle">INDIVIDUAL SPARTAN STATISTICS — SEASON 6</p>
+
+    <div class="tab-bar" id="player-tabs"></div>
+    <div id="player-panel"></div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+renderNav('players.html');
+
+let globalData = null;
+let activePlayer = null;
+let killsChart = null;
+let kdrChart = null;
+let medalChart = null;
+
+loadStats().then(data => {
+  globalData = data;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const { players } = data;
+  document.getElementById('player-tabs').innerHTML = players.map(p =>
+    `<button class="tab-btn" onclick="showPlayer('${p}')">${dn(p, data)}</button>`
+  ).join('');
+
+  showPlayer(players[0]);
+});
+
+function showPlayer(gamertag) {
+  if (!globalData) return;
+  activePlayer = gamertag;
+  const data = globalData;
+  const { players, aggregates, games } = data;
+  const a = aggregates[gamertag];
+  const color = PLAYER_COLORS[gamertag] || '#00e5ff';
+  const displayName = dn(gamertag, data);
+
+  // Update tabs
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', players[i] === gamertag);
+  });
+
+  const panel = document.getElementById('player-panel');
+
+  // Build per-game data for this player
+  const playerGames = games.map(g => ({ ...g.players[gamertag], game_num: g.game_num_season, map: g.map, winning_team: g.winning_team }));
+
+  // Top medals
+  const medalHtml = a.top_medals.length ? a.top_medals.map(([medal, count]) =>
+    `<div class="medal-chip"><span class="m-count">${count}</span>${medal}</div>`
+  ).join('') : '<span style="color:var(--text-dim);font-size:.8rem">No medal data</span>';
+
+  panel.innerHTML = `
+    <div class="player-header">
+      <div class="player-avatar" style="background:${color}22;border:2px solid ${color}44;color:${color}">
+        ${displayName[0].toUpperCase()}
+      </div>
+      <div class="player-header-info">
+        <h2 style="color:${color};text-shadow:0 0 14px ${color}44">${displayName}</h2>
+        <p>${gamertag} &nbsp;·&nbsp; ${a.games} GAMES &nbsp;·&nbsp; ${a.wins}W / ${a.losses}L</p>
+      </div>
+    </div>
+
+    <div class="cards-grid" style="margin-bottom:20px">
+      ${[
+        { num: fmtKdr(a.kdr),       lbl: 'CAREER KDR'     },
+        { num: a.total_kills,        lbl: 'TOTAL KILLS'    },
+        { num: a.win_pct + '%',      lbl: 'WIN RATE'       },
+        { num: a.avg_kills,          lbl: 'AVG KILLS/GAME' },
+        { num: a.avg_deaths,         lbl: 'AVG DEATHS/GAME'},
+        { num: a.best_kills,         lbl: 'MOST KILLS/GAME'},
+        { num: fmtKdr(a.best_kdr),   lbl: 'BEST KDR/GAME'  },
+        { num: a.total_medals,       lbl: 'TOTAL MEDALS'   },
+      ].map(s => `<div class="stat-card"><div class="num" style="color:${color};text-shadow:0 0 12px ${color}44">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join('')}
+    </div>
+
+    ${sectionHdr('MEDALS EARNED')}
+    <div class="box" style="margin-bottom:20px">
+      <div class="medal-row">${medalHtml}</div>
+    </div>
+
+    ${sectionHdr('PERFORMANCE OVER TIME')}
+    <div class="chart-grid">
+      <div class="chart-box"><h3>KILLS PER GAME</h3><canvas id="kills-chart"></canvas></div>
+      <div class="chart-box"><h3>KDR PER GAME</h3><canvas id="kdr-chart"></canvas></div>
+    </div>
+
+    ${sectionHdr('VS OTHER PLAYERS')}
+    <div class="box tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>OPPONENT</th>
+          <th class="r">MY AVG KILLS</th>
+          <th class="r">THEIR AVG KILLS</th>
+          <th class="r">GAMES TOGETHER</th>
+        </tr></thead>
+        <tbody id="h2h-body"></tbody>
+      </table>
+    </div>
+  `;
+
+  // Charts
+  const labels = playerGames.map(g => `G${g.game_num}`);
+
+  if (killsChart) killsChart.destroy();
+  if (kdrChart) kdrChart.destroy();
+
+  killsChart = makeChart('kills-chart', 'line', labels, [{
+    label: 'Kills',
+    data: playerGames.map(g => g.kills),
+    borderColor: color,
+    backgroundColor: color + '18',
+    fill: true,
+    tension: 0.3,
+    pointRadius: 2,
+    pointHoverRadius: 5,
+  }]);
+
+  kdrChart = makeChart('kdr-chart', 'line', labels, [{
+    label: 'KDR',
+    data: playerGames.map(g => g.kdr),
+    borderColor: color,
+    backgroundColor: color + '18',
+    fill: true,
+    tension: 0.3,
+    pointRadius: 2,
+    pointHoverRadius: 5,
+  }], {
+    plugins: {
+      legend: { display: false },
+      annotation: {},
+    },
+  });
+
+  // H2H
+  const others = players.filter(p => p !== gamertag);
+  const h2hBody = document.getElementById('h2h-body');
+  h2hBody.innerHTML = others.map(opp => {
+    let myKills = 0, theirKills = 0, sharedGames = 0;
+    games.forEach(g => {
+      const me = g.players[gamertag];
+      const them = g.players[opp];
+      if (me && them) {
+        myKills += me.kills;
+        theirKills += them.kills;
+        sharedGames++;
+      }
+    });
+    const g = sharedGames || 1;
+    const myAvg = (myKills / g).toFixed(1);
+    const theirAvg = (theirKills / g).toFixed(1);
+    const oppColor = PLAYER_COLORS[opp] || '#aaa';
+    return `<tr>
+      <td><span class="player-tag">${playerDot(opp)}${dn(opp, data)}</span></td>
+      <td class="r ${parseFloat(myAvg) >= parseFloat(theirAvg) ? 'good' : 'bad'}">${myAvg}</td>
+      <td class="r">${theirAvg}</td>
+      <td class="r dim">${sharedGames}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

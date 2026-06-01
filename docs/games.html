@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Nite S6 — Games</title>
+  <link rel="stylesheet" href="css/halo.css">
+  <style>
+    .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .filter-row label { font-size: .68rem; letter-spacing: .18em; color: var(--text-dim); }
+    .filter-row select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: .78rem;
+      padding: 6px 10px;
+      outline: none;
+    }
+    .filter-row select:focus { border-color: var(--teal-dim); }
+    .game-count { font-size: .68rem; letter-spacing: .18em; color: var(--text-dim); margin-left: auto; }
+
+    /* Expandable row */
+    .expand-row { display: none; }
+    .expand-row td {
+      background: var(--surface2);
+      border-bottom: 2px solid var(--teal-dim);
+      padding: 14px 16px;
+    }
+    .expand-row.open { display: table-row; }
+    .expand-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .expand-player {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+    .expand-player .ep-name { font-family: var(--font-ui); font-weight: 700; font-size: .88rem; margin-bottom: 6px; }
+    .expand-player .ep-stat { font-size: .72rem; letter-spacing: .08em; color: var(--text-dim); margin-top: 2px; }
+    .expand-player .ep-stat span { color: var(--text); }
+    tbody tr.data-row { cursor: pointer; }
+    .expand-icon { font-size: .7rem; color: var(--text-dim); }
+  </style>
+</head>
+<body>
+<div id="nav"></div>
+<main>
+  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
+  <div id="content" style="display:none">
+    <h1 class="page-title">Game Log</h1>
+    <p class="page-subtitle">ALL MATCHES — SEASON 6</p>
+
+    <div class="filter-row">
+      <label>MAP</label>
+      <select id="filter-map" onchange="applyFilters()"><option value="">ALL MAPS</option></select>
+      <label>MATCHUP</label>
+      <select id="filter-matchup" onchange="applyFilters()"><option value="">ALL MATCHUPS</option></select>
+      <label>WINNER</label>
+      <select id="filter-winner" onchange="applyFilters()"><option value="">ANY TEAM</option></select>
+      <span class="game-count" id="game-count"></span>
+    </div>
+
+    <div class="box tbl-wrap" style="padding:0">
+      <table id="games-tbl">
+        <thead><tr>
+          <th class="c">GAME</th>
+          <th class="c">NIGHT</th>
+          <th>MAP</th>
+          <th>MATCHUP</th>
+          <th>WINNER</th>
+          <th id="p0h"></th>
+          <th id="p1h"></th>
+          <th id="p2h"></th>
+          <th id="p3h"></th>
+          <th class="c" style="width:20px"></th>
+        </tr></thead>
+        <tbody id="games-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+renderNav('games.html');
+
+let globalData = null;
+let filteredGames = [];
+
+loadStats().then(data => {
+  globalData = data;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const { players, games, maps, matchups, teams } = data;
+
+  players.forEach((p, i) => {
+    const el = document.getElementById(`p${i}h`);
+    if (el) el.textContent = dn(p, data).toUpperCase();
+  });
+
+  // Populate filters
+  const mapSel = document.getElementById('filter-map');
+  Object.keys(maps).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    mapSel.appendChild(opt);
+  });
+
+  const muSel = document.getElementById('filter-matchup');
+  Object.keys(matchups).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    muSel.appendChild(opt);
+  });
+
+  const winSel = document.getElementById('filter-winner');
+  Object.keys(teams).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    winSel.appendChild(opt);
+  });
+
+  applyFilters();
+});
+
+function applyFilters() {
+  if (!globalData) return;
+  const mapF = document.getElementById('filter-map').value;
+  const muF  = document.getElementById('filter-matchup').value;
+  const winF = document.getElementById('filter-winner').value;
+
+  filteredGames = [...globalData.games].reverse().filter(g =>
+    (!mapF || g.map === mapF) &&
+    (!muF  || g.matchup === muF) &&
+    (!winF || g.winning_team === winF)
+  );
+
+  document.getElementById('game-count').textContent = `${filteredGames.length} GAMES`;
+  renderGames();
+}
+
+function renderGames() {
+  const data = globalData;
+  const { players } = data;
+  const tbody = document.getElementById('games-body');
+
+  tbody.innerHTML = filteredGames.map((g, idx) => {
+    const wc = teamColor(g.winning_team, data);
+    const dataRow = `<tr class="data-row" onclick="toggleExpand(${idx})">
+      <td class="c dim">G${g.game_num_season}</td>
+      <td class="c dim">${g.halonite_num_season}</td>
+      <td>${g.map}</td>
+      <td class="dim">${g.matchup}</td>
+      <td>${teamBadge(g.winning_team, wc)}</td>
+      ${players.map(p => {
+        const ps = g.players[p];
+        const won = ps.team === g.winning_team;
+        return `<td><span class="kd">
+          <span class="${won ? 'kills' : ''}" style="${won ? '' : 'color:var(--text)'}">${ps.kills}</span>
+          <span class="slash">/</span>
+          <span class="deaths">${ps.deaths}</span>
+        </span></td>`;
+      }).join('')}
+      <td class="c expand-icon" id="icon-${idx}">▶</td>
+    </tr>`;
+
+    const expandRow = `<tr class="expand-row" id="expand-${idx}">
+      <td colspan="${4 + players.length + 2}">
+        <div class="expand-inner">
+          ${players.map(p => {
+            const ps = g.players[p];
+            const pc = PLAYER_COLORS[p] || '#aaa';
+            const tc = teamColor(ps.team, data);
+            const won = ps.team === g.winning_team;
+            const topMedals = Object.entries(ps.medals).sort((a,b) => b[1]-a[1]).slice(0,3);
+            return `<div class="expand-player" style="border-top:2px solid ${pc}44">
+              <div class="ep-name" style="color:${pc}">${playerDot(p)}${dn(p, data)}
+                <span style="font-size:.65rem;margin-left:6px">${teamBadge(ps.team, tc)}</span>
+                ${won ? '<span style="color:#4ade80;font-size:.6rem;margin-left:4px">WIN</span>' : ''}
+              </div>
+              <div class="ep-stat">K/D/A: <span>${ps.kills}/${ps.deaths}/${ps.assists}</span></div>
+              <div class="ep-stat">KDR: <span>${fmtKdr(ps.kdr)}</span></div>
+              <div class="ep-stat">Best streak: <span>${ps.most_kills_in_row}</span></div>
+              <div class="ep-stat">Medals: <span>${ps.total_medals}</span></div>
+              ${topMedals.length ? `<div class="ep-stat">Top: <span>${topMedals.map(([m,c])=>`${m} ×${c}`).join(', ')}</span></div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </td>
+    </tr>`;
+
+    return dataRow + expandRow;
+  }).join('');
+}
+
+function toggleExpand(idx) {
+  const row = document.getElementById(`expand-${idx}`);
+  const icon = document.getElementById(`icon-${idx}`);
+  if (!row) return;
+  const open = row.classList.toggle('open');
+  icon.textContent = open ? '▼' : '▶';
+}
+</script>
+</body>
+</html>

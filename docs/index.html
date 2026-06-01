@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Nite S6 — Overview</title>
+  <link rel="stylesheet" href="css/halo.css">
+</head>
+<body>
+<div id="nav"></div>
+<main>
+  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
+  <div id="content" style="display:none">
+    <h1 class="page-title">Season Overview</h1>
+    <p class="page-subtitle">SEASON 6 — SPARTAN OPERATIONS</p>
+
+    <div id="season-stats" class="cards-grid"></div>
+
+    <div id="sh-standings"></div>
+    <div class="box tbl-wrap">
+      <table id="standings-tbl">
+        <thead><tr>
+          <th class="c">#</th>
+          <th>PLAYER</th>
+          <th class="r">W</th>
+          <th class="r">L</th>
+          <th class="r">WIN%</th>
+          <th class="r">KDR</th>
+          <th class="r">KILLS</th>
+          <th class="r">DEATHS</th>
+          <th class="r">AVG K</th>
+          <th class="r">MEDALS</th>
+        </tr></thead>
+        <tbody id="standings-body"></tbody>
+      </table>
+    </div>
+
+    <div id="sh-charts"></div>
+    <div class="chart-grid">
+      <div class="chart-box"><h3>TOTAL KILLS</h3><canvas id="kills-chart"></canvas></div>
+      <div class="chart-box"><h3>KDR TREND — ALL GAMES</h3><canvas id="kdr-chart"></canvas></div>
+    </div>
+
+    <div id="sh-recent"></div>
+    <div class="box tbl-wrap">
+      <table id="recent-tbl">
+        <thead><tr>
+          <th>GAME</th>
+          <th>MAP</th>
+          <th>MATCHUP</th>
+          <th>WINNER</th>
+          <th id="p0h"></th>
+          <th id="p1h"></th>
+          <th id="p2h"></th>
+          <th id="p3h"></th>
+        </tr></thead>
+        <tbody id="recent-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+renderNav('index.html');
+
+loadStats().then(data => {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const { players, aggregates, games, records } = data;
+
+  // Season stat cards
+  const totalGames = games.length;
+  const totalKills = players.reduce((s, p) => s + aggregates[p].total_kills, 0);
+  const topKDR = players.reduce((best, p) => aggregates[p].kdr > (best.v || 0) ? { p, v: aggregates[p].kdr } : best, {});
+  document.getElementById('season-stats').innerHTML = [
+    { num: totalGames, lbl: 'GAMES PLAYED' },
+    { num: totalKills, lbl: 'TOTAL KILLS' },
+    { num: players.length, lbl: 'SPARTANS' },
+    { num: records.most_kills.value, lbl: 'KILL RECORD' },
+  ].map(s => `<div class="stat-card"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join('');
+
+  // Section headers
+  document.getElementById('sh-standings').innerHTML = sectionHdr('SEASON STANDINGS');
+  document.getElementById('sh-charts').innerHTML = sectionHdr('PERFORMANCE CHARTS');
+  document.getElementById('sh-recent').innerHTML = sectionHdr('RECENT GAMES');
+
+  // Standings — sort by KDR desc
+  const ranked = [...players].sort((a, b) => aggregates[b].kdr - aggregates[a].kdr);
+  const rankClass = ['gold', 'silver', 'bronze'];
+  document.getElementById('standings-body').innerHTML = ranked.map((p, i) => {
+    const a = aggregates[p];
+    const c = PLAYER_COLORS[p] || '#aaa';
+    return `<tr>
+      <td class="rank-cell ${rankClass[i] || ''}">${i + 1}</td>
+      <td><span class="player-tag">${playerDot(p)}${dn(p, data)}</span></td>
+      <td class="r">${a.wins}</td>
+      <td class="r">${a.losses}</td>
+      <td class="r ${a.win_pct >= 50 ? 'good' : 'bad'}">${a.win_pct}%</td>
+      <td class="r teal">${fmtKdr(a.kdr)}</td>
+      <td class="r">${a.total_kills}</td>
+      <td class="r dim">${a.total_deaths}</td>
+      <td class="r">${a.avg_kills}</td>
+      <td class="r dim">${a.total_medals}</td>
+    </tr>`;
+  }).join('');
+
+  // Kills bar chart
+  makeChart('kills-chart', 'bar',
+    ranked.map(p => dn(p, data)),
+    [{
+      data: ranked.map(p => aggregates[p].total_kills),
+      backgroundColor: ranked.map(p => PLAYER_COLORS[p] + '99'),
+      borderColor: ranked.map(p => PLAYER_COLORS[p]),
+      borderWidth: 1,
+    }],
+    { plugins: { legend: { display: false } } }
+  );
+
+  // KDR line chart
+  const labels = games.map((_, i) => `G${i + 1}`);
+  makeChart('kdr-chart', 'line', labels,
+    players.map(p => ({
+      label: dn(p, data),
+      data: aggregates[p].kdr_per_game,
+      borderColor: PLAYER_COLORS[p],
+      backgroundColor: 'transparent',
+      pointRadius: 1,
+      pointHoverRadius: 4,
+      tension: 0.3,
+    })),
+    { plugins: { legend: { position: 'top' } } }
+  );
+
+  // Recent games (last 8, reversed)
+  const recent = [...games].reverse().slice(0, 8);
+  players.forEach((p, i) => {
+    const el = document.getElementById(`p${i}h`);
+    if (el) el.textContent = dn(p, data).toUpperCase();
+  });
+
+  document.getElementById('recent-body').innerHTML = recent.map(g => {
+    const wc = teamColor(g.winning_team, data);
+    return `<tr>
+      <td class="dim">G${g.game_num_season}</td>
+      <td>${g.map}</td>
+      <td class="dim">${g.matchup}</td>
+      <td>${teamBadge(g.winning_team, wc)}</td>
+      ${players.map(p => {
+        const ps = g.players[p];
+        return `<td><span class="kd"><span class="kills">${ps.kills}</span><span class="slash">/</span><span class="deaths">${ps.deaths}</span></span></td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+});
+</script>
+</body>
+</html>

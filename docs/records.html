@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Nite S6 — Records</title>
+  <link rel="stylesheet" href="css/halo.css">
+  <style>
+    .leaderboard { margin-bottom: 32px; }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      transition: background .12s;
+    }
+    .lb-row:last-child { border-bottom: 1px solid var(--border); }
+    .lb-row:hover { background: var(--teal-glow2); }
+    .lb-rank {
+      font-family: var(--font-halo);
+      font-size: 1.1rem;
+      width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .lb-val {
+      font-family: var(--font-halo);
+      font-size: 1.6rem;
+      line-height: 1;
+      flex-shrink: 0;
+      width: 70px;
+      text-align: right;
+    }
+    .lb-info { flex: 1; }
+    .lb-info .lb-player { font-family: var(--font-ui); font-weight: 700; font-size: .95rem; }
+    .lb-info .lb-sub { font-size: .65rem; letter-spacing: .15em; color: var(--text-dim); margin-top: 2px; }
+    .lb-bar { width: 100%; max-width: 200px; }
+  </style>
+</head>
+<body>
+<div id="nav"></div>
+<main>
+  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
+  <div id="content" style="display:none">
+    <h1 class="page-title">Season Records</h1>
+    <p class="page-subtitle">BEST SINGLE-GAME PERFORMANCES — SEASON 6</p>
+
+    <div id="records-section"></div>
+
+    <div id="sh-lb"></div>
+    <div id="lb-section"></div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+renderNav('records.html');
+
+loadStats().then(data => {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const { records, players, aggregates } = data;
+
+  // Record cards
+  document.getElementById('records-section').innerHTML = `
+    ${sectionHdr('SINGLE-GAME RECORDS')}
+    <div class="record-grid">
+      ${Object.entries(records).map(([key, r]) => {
+        const c = PLAYER_COLORS[r.player] || '#00e5ff';
+        const val = typeof r.value === 'number' && r.value % 1 !== 0 ? r.value.toFixed(2) : r.value;
+        return `<div class="record-card" style="border-left-color:${c}">
+          <div class="r-label">${r.label.toUpperCase()}</div>
+          <div class="r-value" style="color:${c};text-shadow:0 0 14px ${c}44">${val}</div>
+          <div class="r-player">${playerDot(r.player)}${dn(r.player, data)}</div>
+          <div class="r-meta">GAME ${r.game_num} &nbsp;·&nbsp; ${r.map}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  // Season leaderboards
+  const lbDefs = [
+    { key: 'kdr',         label: 'CAREER KDR',         fmt: v => parseFloat(v).toFixed(3) },
+    { key: 'total_kills', label: 'TOTAL KILLS',         fmt: v => v },
+    { key: 'win_pct',     label: 'WIN RATE',            fmt: v => v + '%' },
+    { key: 'avg_kills',   label: 'AVG KILLS / GAME',    fmt: v => parseFloat(v).toFixed(2) },
+    { key: 'best_kills',  label: 'MOST KILLS IN A GAME',fmt: v => v },
+    { key: 'total_medals',label: 'TOTAL MEDALS',        fmt: v => v },
+  ];
+
+  document.getElementById('sh-lb').innerHTML = sectionHdr('SEASON LEADERBOARDS');
+
+  document.getElementById('lb-section').innerHTML = lbDefs.map(({ key, label, fmt }) => {
+    const ranked = [...players].sort((a, b) => aggregates[b][key] - aggregates[a][key]);
+    const max = aggregates[ranked[0]][key] || 1;
+    const rankClass = ['gold', 'silver', 'bronze'];
+
+    return `
+      <div class="leaderboard">
+        <div style="font-size:.66rem;letter-spacing:.28em;color:var(--text-dim);margin-bottom:8px">${label}</div>
+        ${ranked.map((p, i) => {
+          const val = aggregates[p][key];
+          const c = PLAYER_COLORS[p] || '#aaa';
+          const pct = Math.round(val / max * 100);
+          return `<div class="lb-row">
+            <div class="lb-rank ${rankClass[i] || ''}">${i + 1}</div>
+            <div class="lb-val" style="color:${c};text-shadow:0 0 10px ${c}33">${fmt(val)}</div>
+            <div class="lb-info">
+              <div class="lb-player"><span class="player-tag">${playerDot(p)}${dn(p, data)}</span></div>
+              <div class="pbar-bg" style="margin-top:5px;max-width:220px"><div class="pbar-fill" style="width:${pct}%;background:${c};box-shadow:0 0 6px ${c}44"></div></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+});
+</script>
+</body>
+</html>
