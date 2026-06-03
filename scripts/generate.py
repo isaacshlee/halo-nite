@@ -1,5 +1,5 @@
 """
-Reads S6 Carnage Report.xlsx → docs/data/stats.json
+Reads Lifetime Carnage Report.xlsx → docs/data/stats.json
 Run after each session: python3 scripts/generate.py
 """
 import pandas as pd
@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import defaultdict
 
 ROOT        = Path(__file__).parent.parent
-EXCEL_PATH  = ROOT / 'data' / 'S6 Carnage Report.xlsx'
+EXCEL_PATH  = ROOT / 'data' / 'Lifetime Carnage Report.xlsx'
 OUTPUT_PATH = ROOT / 'docs' / 'data' / 'stats.json'
 
 TEAM_NAMES  = {0: 'Red', 1: 'Blue', 2: 'Green', 7: 'Pink', 5: 'Gold', 6: 'Brown'}
@@ -47,6 +47,12 @@ CORE_SUFFIXES = {
     'Unfrigginbelievables','SniperSprees',
 }
 
+_TEAM_NAME_SET    = set(TEAM_NAMES.values())
+_MATCHUP_NAME_SET = set(MATCHUP_NAMES.values())
+
+# Season keys that span multiple seasons and should use lifetime labels/nite numbers
+_MULTI_SEASON = (None, 'Lifetime', 'S3+', 'S6+')
+
 
 # ── helpers ────────────────────────────────────────────────────────────────
 def _i(v):
@@ -59,6 +65,30 @@ def _f(v):
 
 def _s(v):
     return str(v) if v is not None and v == v else ''
+
+def should_combine(season_num):
+    """True when suicides+betrayals are combined (pre-S6 data)."""
+    if season_num == 'S6+':
+        return False
+    if season_num in _MULTI_SEASON:
+        return True
+    try:
+        return int(season_num) < 6
+    except (TypeError, ValueError):
+        return True
+
+def _decode_team(v):
+    """Accept a team-name string or a numeric code; return the name string."""
+    if v is None or (v != v): return ''
+    if isinstance(v, str) and v in _TEAM_NAME_SET: return v
+    return TEAM_NAMES.get(_i(v), str(v))
+
+def _decode_matchup(v):
+    """Accept a matchup-name string or a numeric code; return the name string."""
+    if v is None or (v != v): return ''
+    if isinstance(v, str) and v in _MATCHUP_NAME_SET: return v
+    code = _i(v)
+    return MATCHUP_NAMES.get(code, f'Matchup {code}')
 
 def get_players(df):
     return [c.replace('_Kills','') for c in df.columns if c.endswith('_Kills')]
@@ -80,18 +110,18 @@ def get_medal_suffixes(df, players):
 # ── per-game construction ──────────────────────────────────────────────────
 def build_games(df, players, medal_suffixes, season_num):
     games = []
+    combine = should_combine(season_num)
+    use_lifetime_nite = season_num in _MULTI_SEASON
+
     for _, row in df.iterrows():
-        wt_code = _i(row.get('Winning_Team'))
-        lt_code = _i(row.get('Losing_Team'))
-        mu_code = _i(row.get('Matchup'))
-        matchup = MATCHUP_NAMES.get(mu_code, f'Matchup {mu_code}')
-        wt_name = TEAM_NAMES.get(wt_code, str(wt_code))
-        lt_name = TEAM_NAMES.get(lt_code, str(lt_code))
+        matchup = _decode_matchup(row.get('Matchup'))
+        wt_name = _decode_team(row.get('Winning_Team'))
+        lt_name = _decode_team(row.get('Losing_Team'))
 
         sd_raw  = row.get('Set_Decider')
         sw_raw  = row.get('Set_Winner')
         set_dec = 1 if _i(sd_raw) == 1 else 0
-        set_win = TEAM_NAMES.get(_i(sw_raw), '') if set_dec else ''
+        set_win = _decode_team(sw_raw) if set_dec else ''
 
         # Collect raw per-player stats first
         raw = {}
@@ -137,7 +167,6 @@ def build_games(df, players, medal_suffixes, season_num):
             qike = round(0.5 * (r['kills'] / total_kills) + 0.5 * (r['score'] / total_score), 4)
             kd_spread  = r['kills'] - r['deaths']
             kcd_spread = round(kc - r['deaths'], 2)
-            combine = season_num is not None and season_num != 'Lifetime' and season_num < 6
             sb = r['suicides'] + r['betrayals'] if combine else None
 
             player_data[p] = {
@@ -187,31 +216,34 @@ def build_games(df, players, medal_suffixes, season_num):
         wt_score = team_map.get(wt_name, {}).get('score', 0)
         lt_score = team_map.get(lt_name, {}).get('score', 0)
 
+        hn_season   = _i(row.get('Halonite_Num_Season'))
+        hn_lifetime = _i(row.get('Halonite_Num_Lifetime'))
+
         games.append({
-            'game_num_season':   _i(row.get('Game_Num_Season')),
-            'game_num_lifetime': _i(row.get('Game_Num_Lifetime')),
-            'halonite_num':      _i(row.get('Halonite_Num_Season')),
-            'game_num_nite':     _i(row.get('Game_Num_Nite')),
-            'season':            _i(row.get('Season')),
-            'matchup':           matchup,
-            'matchup_code':      mu_code,
-            'winning_team':      wt_name,
-            'losing_team':       lt_name,
-            'winning_score':     wt_score,
-            'losing_score':      lt_score,
-            'mov':               wt_score - lt_score,
-            'map':               _s(row.get('Map_Manual')) or _s(row.get('Map')) or 'Unknown',
-            'timestamp':         _s(row.get('Timestamp')),
-            'seconds_played':    game_time,
-            'set_decider':       set_dec,
-            'set_winner':        set_win,
-            'total_kills':       total_kills,
-            'total_score':       total_score,
-            'players':           player_data,
-            'teams':             team_map,
+            'game_num_season':      _i(row.get('Game_Num_Season')),
+            'game_num_lifetime':    _i(row.get('Game_Num_Lifetime')),
+            'halonite_num':         hn_season,
+            'halonite_num_lifetime':hn_lifetime,
+            'game_num_nite':        _i(row.get('Game_Num_Nite')),
+            'season':               _i(row.get('Season')),
+            'matchup':              matchup,
+            'winning_team':         wt_name,
+            'losing_team':          lt_name,
+            'winning_score':        wt_score,
+            'losing_score':         lt_score,
+            'mov':                  wt_score - lt_score,
+            'map':                  _s(row.get('Map_Manual')) or _s(row.get('Map')) or 'Unknown',
+            'timestamp':            _s(row.get('Timestamp')),
+            'seconds_played':       game_time,
+            'set_decider':          set_dec,
+            'set_winner':           set_win,
+            'total_kills':          total_kills,
+            'total_score':          total_score,
+            'players':              player_data,
+            'teams':                team_map,
         })
 
-    return sorted(games, key=lambda g: g['game_num_season'])
+    return sorted(games, key=lambda g: g['game_num_lifetime'])
 
 
 # ── summary ────────────────────────────────────────────────────────────────
@@ -241,7 +273,7 @@ def build_summary(games, players, season_num):
             totals['medals']       += ps['total_medals']
             totals['score']        += ps['score']
 
-    total_nites = len({g['halonite_num'] for g in games})
+    total_nites = len({g['halonite_num_lifetime'] for g in games})
     return {
         'total_games':    len(games),
         'total_sets':     sets,
@@ -249,7 +281,7 @@ def build_summary(games, players, season_num):
         'total_seconds':  total_seconds,
         'matchup_games':  dict(matchup_games),
         'matchup_seconds':dict(matchup_seconds),
-        'combine_suicides': season_num != 6,
+        'combine_suicides': should_combine(season_num),
         **{k: int(v) for k, v in totals.items()},
     }
 
@@ -258,18 +290,17 @@ def build_summary(games, players, season_num):
 def build_aggregates(games, players, medal_suffixes, season_num):
     agg = {p: defaultdict(lambda: 0) for p in players}
     med = {p: defaultdict(int) for p in players}
-    ka_agg = {p: defaultdict(int) for p in players}   # kills_against accumulator
+    ka_agg = {p: defaultdict(int) for p in players}
     cum = {p: {k: [] for k in [
         'wl_spread','set_wl_spread','kills','deaths','assists','score',
         'kd_spread','qike','weapon_kills','grenade_kills','melee_kills','other_kills',
     ]} for p in players}
     labels = []
 
-    # Running totals
     run = {p: defaultdict(lambda: 0) for p in players}
     set_run = {p: defaultdict(lambda: 0) for p in players}
 
-    use_lifetime_label = season_num in (None, 'Lifetime')
+    use_lifetime_label = season_num in _MULTI_SEASON
     for g in games:
         labels.append(g['game_num_lifetime'] if use_lifetime_label else g['game_num_season'])
         wt = g['winning_team']
@@ -298,20 +329,16 @@ def build_aggregates(games, players, medal_suffixes, season_num):
             a['best_kills'] = max(a['best_kills'], ps['kills'])
             a['best_kdr']   = max(a['best_kdr'],   ps['kdr'])
             a['best_score'] = max(a['best_score'],  ps['score'])
-            # Medal totals
             for suf, cnt in ps['medals'].items():
                 med[p][suf] += cnt
-            # Kills against each opponent
             for opp, cnt in ps.get('kills_against', {}).items():
                 ka_agg[p][opp] += cnt
-            # Set wins
             if g['set_decider'] and sw:
                 sw_won = (ps['team'] == sw)
                 a['set_wins']   += int(sw_won)
                 a['set_losses'] += int(not sw_won)
                 set_run[p]['spread'] += 1 if sw_won else -1
 
-            # Cumulative
             run[p]['wl']    += 1 if won else -1
             run[p]['kills'] += ps['kills']
             run[p]['deaths']+= ps['deaths']
@@ -377,7 +404,7 @@ def build_aggregates(games, players, medal_suffixes, season_num):
             'best_kills':   int(a['best_kills']),
             'best_kdr':     round(a['best_kdr'], 3),
             'best_score':   int(a['best_score']),
-            'combine_suicides': season_num != 6,
+            'combine_suicides': should_combine(season_num),
             'medals': dict(med[p]),
             'kills_against': {opp: int(ka_agg[p][opp]) for opp in players if opp != p},
             'cumulative': cum[p],
@@ -393,7 +420,7 @@ def build_teams(games, players, season_num=None):
     run = defaultdict(lambda: defaultdict(lambda: 0))
     labels = []
 
-    use_lifetime_label = season_num in (None, 'Lifetime')
+    use_lifetime_label = season_num in _MULTI_SEASON
     for g in games:
         labels.append(g['game_num_lifetime'] if use_lifetime_label else g['game_num_season'])
         wt = g['winning_team']
@@ -420,7 +447,6 @@ def build_teams(games, players, season_num=None):
             a['betrayals']     += ps['betrayals']
             a['suicides']      += ps['suicides']
             if won:
-                # total_mov is double-counted (once per player); divide by wins (also double-counted) → correct
                 a['total_mov'] += g['mov']
             if g['set_decider'] and sw:
                 a['set_wins']   += int(t == sw)
@@ -432,19 +458,17 @@ def build_teams(games, players, season_num=None):
             run[t]['qike']    += ps['qike']
             run[t]['set_wl']  += (1 if t == sw else -1) if (g['set_decider'] and sw) else 0
 
-        # Append cumulative after processing all players in game
         for t in list(cum.keys()):
-            cum[t]['wl_spread'].append(run[t]['wl'] // 2)  # 2 players per team → halve
+            cum[t]['wl_spread'].append(run[t]['wl'] // 2)
             cum[t]['set_wl_spread'].append(run[t]['set_wl'] // 2)
             cum[t]['qike'].append(round(run[t]['qike'], 4))
 
     result = {}
     for t, a in acc.items():
-        g_count = a['games'] // 2 or 1  # double-counted
+        g_count = a['games'] // 2 or 1
         wins    = a['wins'] // 2
         losses  = a['losses'] // 2
         deaths  = a['deaths'] or 1
-        # set wins are also double-counted
         sw_ = a['set_wins'] // 2
         sl_ = a['set_losses'] // 2
         result[t] = {
@@ -470,7 +494,6 @@ def build_teams(games, players, season_num=None):
             'avg_deaths':   round(a['deaths'] / g_count, 2),
             'avg_score':    round(a['score'] / g_count, 2),
             'avg_qike':     round(a['qike'] / (a['games'] or 1), 4),
-            # a['wins'] and a['total_mov'] are both double-counted → division cancels correctly
             'avg_mov':      round(a['total_mov'] / (a['wins'] or 1), 2),
             'weapon_kills':  a['weapon_kills'],
             'grenade_kills': a['grenade_kills'],
@@ -526,8 +549,8 @@ def build_maps(games, players):
     p_wins  = defaultdict(lambda: defaultdict(int))
     team_wins  = defaultdict(lambda: defaultdict(int))
     team_games = defaultdict(lambda: defaultdict(int))
-    mu_games   = defaultdict(lambda: defaultdict(int))   # [map][matchup] = game count
-    mu_wins    = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # [map][mu][team]
+    mu_games   = defaultdict(lambda: defaultdict(int))
+    mu_wins    = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
     for g in games:
         mn = g['map']
@@ -571,7 +594,6 @@ def build_maps(games, players):
         player_win_pct   = {p: round(p_wins[mn][p] / (p_games[mn][p] or 1) * 100, 1) for p in players}
         tw = {t: round(team_wins[mn][t] / (team_games[mn][t] or 1) * 100, 1)
               for t in team_games[mn]}
-        # Per-matchup breakdown
         mu_breakdown = {}
         for mu_name, g_cnt in mu_games[mn].items():
             ta, tb = MATCHUP_PAIRS.get(mu_name, ('', ''))
@@ -606,9 +628,12 @@ def build_maps(games, players):
 
 # ── halo nites ─────────────────────────────────────────────────────────────
 def build_halo_nites(games, players, season_num):
+    # Use lifetime nite numbers for multi-season views to avoid collisions
+    use_lifetime_nite = season_num in _MULTI_SEASON
     nites = defaultdict(list)
     for g in games:
-        nites[g['halonite_num']].append(g)
+        key = g['halonite_num_lifetime'] if use_lifetime_nite else g['halonite_num']
+        nites[key].append(g)
 
     result = []
     for nite_num in sorted(nites.keys()):
@@ -679,7 +704,7 @@ def build_halo_nites(games, players, season_num):
                 'medals':       int(st['medals']),
                 'betrayals':    int(st['betrayals']),
                 'suicides':     int(st['suicides']),
-                'combine_suicides': season_num != 6,
+                'combine_suicides': should_combine(season_num),
             }
 
         result.append({
@@ -693,7 +718,7 @@ def build_halo_nites(games, players, season_num):
 
 # ── records ────────────────────────────────────────────────────────────────
 def build_records(games, players, season_num):
-    combine = season_num != 6
+    combine = should_combine(season_num)
 
     def make_tracker(minimize=False):
         return {'val': float('inf') if minimize else float('-inf'), 'instances': []}
@@ -707,7 +732,6 @@ def build_records(games, players, season_num):
         elif val == tracker['val']:
             tracker['instances'].append(info)
 
-    # Player positive records
     pp = {k: make_tracker() for k in [
         'most_points','most_kills','most_assists','fewest_deaths',
         'most_weapon_kills','most_grenade_kills','most_melee_kills','most_other_kills',
@@ -715,7 +739,6 @@ def build_records(games, players, season_num):
     ]}
     pp['fewest_deaths'] = make_tracker(minimize=True)
 
-    # Player negative records
     pn = {k: make_tracker(True if k != 'most_deaths' and k != 'most_betrayals' and k != 'most_suicides' and k != 'most_betray_suicide' else False) for k in [
         'fewest_points','fewest_kills','most_deaths','lowest_spread',
         'most_betrayals','most_suicides','most_betray_suicide',
@@ -728,11 +751,9 @@ def build_records(games, players, season_num):
     pn['most_suicides']  = make_tracker(minimize=False)
     pn['most_betray_suicide'] = make_tracker(minimize=False)
 
-    # Team positive records
     tp = {k: make_tracker() for k in ['most_kills','most_assists','fewest_deaths','greatest_spread']}
     tp['fewest_deaths'] = make_tracker(minimize=True)
 
-    # Team negative records
     tn = {k: make_tracker(minimize=(k in ['fewest_points','fewest_kills','lowest_spread'])) for k in [
         'fewest_points','fewest_kills','most_deaths','lowest_spread',
     ]}
@@ -773,9 +794,7 @@ def build_records(games, players, season_num):
                 check(pn['most_betrayals'], ps['betrayals'], info)
                 check(pn['most_suicides'],  ps['suicides'],  info)
 
-        # Team records
         for team_name, tm in g['teams'].items():
-            wins = sum(1 for p in tm['players'] if g['players'][p]['team'] == g['winning_team'])
             spread = tm['kills'] - tm['deaths']
             tinfo = {**info_base, 'team': team_name}
             check(tp['most_kills'],      tm['kills'],   tinfo)
@@ -843,7 +862,7 @@ def build_personal_bests(games, players):
 def build_season_data(games, players, medal_suffixes, season_num):
     return {
         'season_num':  season_num,
-        'combine_suicides': season_num != 6,
+        'combine_suicides': should_combine(season_num),
         'summary':     build_summary(games, players, season_num),
         'games':       games,
         'aggregates':  build_aggregates(games, players, medal_suffixes, season_num),
@@ -862,17 +881,22 @@ def main():
     df = pd.read_excel(EXCEL_PATH, engine='openpyxl')
     df = df[df['Game_Num_Season'].notna()].reset_index(drop=True)
 
-    # Patch Set_Decider/Set_Winner from data_only wb (reads formula results)
+    # Patch formula-based columns from data_only workbook (covers S6 ArrayFormula cells)
     ws = wb.active
     headers = [c.value for c in ws[1]]
-    sd_idx = headers.index('Set_Decider')
-    sw_idx = headers.index('Set_Winner')
+    PATCH_COLS = [
+        'Matchup', 'Winning_Team', 'Losing_Team', 'Set_Decider', 'Set_Winner',
+        'Halonite_Num_Lifetime', 'Game_Num_Lifetime', 'Game_Num_Season',
+        'Game_Num_Nite', 'Game_Num_Set',
+    ]
+    patch_idxs = {col: headers.index(col) for col in PATCH_COLS if col in headers}
+    gns_idx = headers.index('Game_Num_Season')
     game_rows = [r for r in ws.iter_rows(min_row=2, values_only=True)
-                 if r[headers.index('Game_Num_Season')] is not None]
+                 if r[gns_idx] is not None]
     for i, gr in enumerate(game_rows):
-        if i < len(df):
-            df.at[i, 'Set_Decider'] = gr[sd_idx]
-            df.at[i, 'Set_Winner']  = gr[sw_idx]
+        if i >= len(df): break
+        for col, idx in patch_idxs.items():
+            df.at[i, col] = gr[idx]
 
     players        = get_players(df)
     medal_suffixes = get_medal_suffixes(df, players)
@@ -883,7 +907,7 @@ def main():
 
     all_games = build_games(df, players, medal_suffixes, season_num=None)
 
-    # Per season
+    # Individual seasons
     seasons = sorted(df['Season'].dropna().unique())
     season_data = {}
     for s in seasons:
@@ -893,10 +917,22 @@ def main():
         season_data[f'S{sn}'] = build_season_data(s_games, players, medal_suffixes, sn)
         print(f'  S{sn}: {len(s_games)} games')
 
-    # Lifetime (all seasons combined; combine_suicides=True)
+    # Season 3 Onward (S3, S4, S6)
+    s3p_df = df[df['Season'] >= 3].reset_index(drop=True)
+    s3p_games = build_games(s3p_df, players, medal_suffixes, season_num='S3+')
+    season_data['S3+'] = build_season_data(s3p_games, players, medal_suffixes, 'S3+')
+    print(f'  S3+: {len(s3p_games)} games')
+
+    # Season 6 Onward
+    s6p_df = df[df['Season'] >= 6].reset_index(drop=True)
+    s6p_games = build_games(s6p_df, players, medal_suffixes, season_num='S6+')
+    season_data['S6+'] = build_season_data(s6p_games, players, medal_suffixes, 'S6+')
+    print(f'  S6+: {len(s6p_games)} games')
+
+    # Lifetime (all seasons combined)
     season_data['Lifetime'] = build_season_data(all_games, players, medal_suffixes, season_num='Lifetime')
 
-    season_keys = ['Lifetime'] + [f'S{int(s)}' for s in seasons]
+    season_keys = ['Lifetime', 'S3+', 'S6+'] + [f'S{int(s)}' for s in seasons]
 
     out = {
         'seasons':       season_keys,

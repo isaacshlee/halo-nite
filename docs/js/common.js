@@ -24,6 +24,14 @@ const NAV_ITEMS = [
   { label: 'RECORDS',  href: 'records.html' },
 ];
 
+const SEASON_LABELS = {
+  'Lifetime': 'Lifetime',
+  'S3+': 'Season 3 Onward',
+  'S6+': 'Season 6 Onward',
+  'S2': 'Season 2', 'S3': 'Season 3', 'S4': 'Season 4',
+  'S5': 'Season 5', 'S6': 'Season 6',
+};
+
 function renderNav(activePage, data) {
   const el = document.getElementById('nav');
   if (!el) return;
@@ -40,7 +48,7 @@ function renderNav(activePage, data) {
       <div class="nav-season">
         <label>SEASON</label>
         <select id="season-sel" onchange="setCurrentSeason(this.value);window.location.reload()">
-          ${seasons.map(s => `<option value="${s}"${s === cur ? ' selected' : ''}>${s}</option>`).join('')}
+          ${seasons.map(s => `<option value="${s}"${s === cur ? ' selected' : ''}>${SEASON_LABELS[s] || s}</option>`).join('')}
         </select>
       </div>
     </div>`;
