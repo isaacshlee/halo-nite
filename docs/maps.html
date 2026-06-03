@@ -1,195 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halo Nite S6 — Maps</title>
-  <link rel="stylesheet" href="css/halo.css">
-  <style>
-    .map-selected {
-      border-color: var(--teal-dim) !important;
-      background: var(--teal-glow2) !important;
-    }
-    .maps-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 10px;
-      margin-bottom: 24px;
-    }
-    .map-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--teal-dim);
-      padding: 12px 14px;
-      cursor: pointer;
-      transition: background .12s, border-color .12s;
-    }
-    .map-card:hover { background: var(--teal-glow2); }
-    .map-card .m-name { font-family: var(--font-ui); font-weight: 700; font-size: .92rem; margin-bottom: 3px; }
-    .map-card .m-games { font-size: .62rem; letter-spacing: .18em; color: var(--text-dim); }
-    .map-detail { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--teal-dim); padding: 20px; }
-    .map-detail-name { font-family: var(--font-halo); font-size: 1.6rem; color: var(--teal); text-shadow: 0 0 14px var(--teal-glow); letter-spacing: .06em; margin-bottom: 14px; }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halo Nite — Maps</title>
+<link rel="stylesheet" href="css/halo.css">
+<style>
+.two-tbl-row { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px; }
+@media(max-width:900px){ .two-tbl-row{grid-template-columns:1fr;} }
+.mtbl { width:100%;border-collapse:collapse;font-size:.82rem; }
+.mtbl th { font-family:var(--font-head);font-size:.66rem;font-weight:600;letter-spacing:.13em;color:var(--teal);padding:5px 8px;background:var(--surface);border-bottom:1px solid var(--teal-dim);white-space:nowrap;text-align:right; }
+.mtbl th:first-child,.mtbl td:first-child { text-align:left; }
+.mtbl td { padding:5px 8px;border-bottom:1px solid var(--border2);white-space:nowrap;text-align:right; }
+.mtbl tr:hover td { background:var(--teal-glow2); }
+.chart-row-2 { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px; }
+.chart-row-3 { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px; }
+.chart-row-4 { display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px; }
+@media(max-width:900px){ .chart-row-2{grid-template-columns:1fr;} .chart-row-3{grid-template-columns:1fr 1fr;} }
+.chart-box-tall { background:var(--surface);border:1px solid var(--border);padding:14px; overflow:visible; }
+.chart-box-tall h3 { font-family:var(--font-head);font-size:.82rem;font-weight:600;letter-spacing:.2em;color:var(--text-dim);margin-bottom:10px; }
+/* Charts are rendered at explicit pixel dimensions (responsive:false) */
+.map-card { background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--teal-dim);padding:9px 12px;cursor:pointer;transition:background .12s; }
+.map-card:hover,.map-card.sel { background:var(--teal-glow2);border-left-color:var(--teal); }
+.map-card .mc-name { font-family:var(--font-head);font-weight:700;font-size:.92rem; }
+.map-card .mc-g { font-size:.66rem;letter-spacing:.14em;color:var(--text-dim); }
+.maps-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px;margin-bottom:18px; }
+.map-detail { background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--teal-dim);padding:16px; }
+.map-detail-name { font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:var(--teal);text-shadow:0 0 12px var(--teal-glow);letter-spacing:.08em;margin-bottom:12px; }
+.hbar-wrap { margin-bottom:5px; }
+.hbar-label { display:flex;justify-content:space-between;font-size:.7rem;letter-spacing:.1em;color:var(--text-dim);margin-bottom:2px; }
+.hbar-bg { height:4px;background:var(--border2); }
+.hbar-fill { height:100%;background:linear-gradient(90deg,var(--teal-dim),var(--teal));transition:width .4s; }
+</style>
 </head>
 <body>
 <div id="nav"></div>
 <main>
-  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
-  <div id="content" style="display:none">
-    <h1 class="page-title">Map Stats</h1>
-    <p class="page-subtitle">BATTLEFIELD ANALYSIS — SEASON 6</p>
+<div id="loading"><span>LOADING...</span></div>
+<div id="content" style="display:none">
+  <h1 class="page-title">Map Stats</h1>
+  <p class="page-subtitle" id="page-sub"></p>
 
-    <div id="sh-overview"></div>
-    <div class="chart-grid">
-      <div class="chart-box"><h3>GAMES PLAYED PER MAP</h3><canvas id="freq-chart"></canvas></div>
-      <div class="chart-box"><h3>AVG KILLS PER PLAYER PER MAP</h3><canvas id="kills-chart"></canvas></div>
+  <div id="sh-overview"></div>
+  <div class="two-tbl-row">
+    <div class="box tbl-wrap" style="padding:0">
+      <table class="mtbl" id="tbl1"><thead id="tbl1-hdr"></thead><tbody id="tbl1-body"></tbody></table>
     </div>
-
-    <div id="sh-detail"></div>
-    <div class="maps-list" id="maps-list"></div>
-
-    <div id="map-detail-panel"></div>
-
-    <div id="sh-tbl"></div>
-    <div class="box tbl-wrap">
-      <table>
-        <thead><tr>
-          <th>MAP</th>
-          <th class="r">GAMES</th>
-          <th class="r">AVG K/PLAYER</th>
-          <th class="r">AVG D/PLAYER</th>
-          <th>TOP PLAYER</th>
-          <th id="p0h" class="r"></th>
-          <th id="p1h" class="r"></th>
-          <th id="p2h" class="r"></th>
-          <th id="p3h" class="r"></th>
-        </tr></thead>
-        <tbody id="maps-body"></tbody>
-      </table>
+    <div class="box tbl-wrap" style="padding:0">
+      <table class="mtbl" id="tbl2"><thead id="tbl2-hdr"></thead><tbody id="tbl2-body"></tbody></table>
     </div>
   </div>
-</main>
 
+  <div id="sh-charts"></div>
+  <div class="chart-row-2" id="chart-row1"></div>
+  <div class="chart-row-3" id="chart-row2"></div>
+  <div class="chart-row-4" id="chart-row3"></div>
+
+  <div id="sh-detail"></div>
+  <div class="maps-grid" id="maps-grid"></div>
+  <div id="map-detail"></div>
+</div>
+</main>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/common.js"></script>
 <script>
-renderNav('maps.html');
-
+renderNav('maps.html', null);
 let globalData = null;
 
 loadStats().then(data => {
   globalData = data;
+  renderNav('maps.html', data);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
-  const { maps, players } = data;
-  const mapEntries = Object.entries(maps); // already sorted by games desc
+  const sd = getSeasonData(data);
+  const { players } = data;
+  const { maps, matchups } = sd;
+  const mapEntries = Object.entries(maps); // alphabetical
+  const mapNames = mapEntries.map(([n])=>n);
+  const sortedPlayers = [...players].sort();
 
-  document.getElementById('sh-overview').innerHTML  = sectionHdr('OVERVIEW CHARTS');
-  document.getElementById('sh-detail').innerHTML    = sectionHdr('SELECT A MAP');
-  document.getElementById('sh-tbl').innerHTML       = sectionHdr('ALL MAPS');
+  document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ${mapNames.length} MAPS`;
+  document.getElementById('sh-overview').innerHTML = sectionHdr('ALL MAPS OVERVIEW');
+  document.getElementById('sh-charts').innerHTML   = sectionHdr('CHART BREAKDOWNS');
+  document.getElementById('sh-detail').innerHTML   = sectionHdr('SELECT A MAP FOR DETAIL');
 
-  players.forEach((p, i) => {
-    const el = document.getElementById(`p${i}h`);
-    if (el) el.textContent = dn(p, data).toUpperCase() + ' AVG K';
+  const mu_pairs = [['Blue','Red'],['Pink','Green'],['Gold','Brown']];
+  const mu_names = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
+
+  // ── Table 1: Player win % ──
+  document.getElementById('tbl1-hdr').innerHTML = `<tr>
+    <th>MAP</th><th class="r">G</th>
+    ${sortedPlayers.map(p=>`<th class="r" style="color:${pc(p,data)}">${dn(p,data)} W%</th>`).join('')}
+  </tr>`;
+  document.getElementById('tbl1-body').innerHTML = mapEntries.map(([mn,m])=>`<tr>
+    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
+    <td class="r dim">${m.games}</td>
+    ${sortedPlayers.map(p=>{
+      const w=m.player_win_pct[p]||0;
+      return `<td class="r" style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</td>`;
+    }).join('')}
+  </tr>`).join('');
+
+  // ── Table 2: Matchup win % ──
+  document.getElementById('tbl2-hdr').innerHTML = `<tr>
+    <th>MAP</th>
+    ${mu_pairs.map(([a,b],i)=>{
+      const ca=teamColor(a,data),cb=teamColor(b,data);
+      return `<th class="r dim" style="font-size:.55rem">G</th>
+              <th class="r" style="color:${ca}">${a}%</th>
+              <th class="r" style="color:${cb}">${b}%</th>`;
+    }).join('')}
+  </tr>`;
+  document.getElementById('tbl2-body').innerHTML = mapEntries.map(([mn,m])=>`<tr>
+    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
+    ${mu_pairs.map(([a,b],i)=>{
+      const muName = mu_names[i];
+      const mu = (m.mu_breakdown||{})[muName];
+      if (!mu) return `<td class="r dim">—</td><td class="r dim">—</td><td class="r dim">—</td>`;
+      const aw=mu.a_win_pct, bw=mu.b_win_pct;
+      return `<td class="r dim">${mu.games}</td>
+              <td class="r" style="color:${aw>=50?'#4ade80':'#f87171'}">${aw}%</td>
+              <td class="r" style="color:${bw>=50?'#4ade80':'#f87171'}">${bw}%</td>`;
+    }).join('')}
+  </tr>`).join('');
+
+  // ── Charts ──
+  const barC = i => `hsl(${185+i*7},80%,${45+(i%3)*7}%)`;
+  const bCs  = mapNames.map((_,i)=>barC(i));
+  const chartH = 420;
+
+  function chartBox(id, title) {
+    return `<div class="chart-box-tall"><h3>${title}</h3><canvas id="${id}"></canvas></div>`;
+  }
+
+  document.getElementById('chart-row1').innerHTML =
+    chartBox('ch-mov','AVG MARGIN OF VICTORY') + chartBox('ch-time','AVG GAME TIME (MIN)');
+  document.getElementById('chart-row2').innerHTML =
+    chartBox('ch-k','AVG KILLS / PLAYER') + chartBox('ch-ast','ASSIST %') + chartBox('ch-bs','AVG BETRAY + SUICIDE');
+  document.getElementById('chart-row3').innerHTML =
+    chartBox('ch-wk','WEAPON KILL %') + chartBox('ch-gk','GRENADE KILL %') +
+    chartBox('ch-mk','MELEE KILL %')  + chartBox('ch-ok','OTHER KILL %');
+
+  const chartSpecs = [
+    ['ch-mov',  mapEntries.map(([,m])=>m.avg_mov),                         ''],
+    ['ch-time', mapEntries.map(([,m])=>+(m.avg_seconds/60).toFixed(1)),     ''],
+    ['ch-k',    mapEntries.map(([,m])=>m.avg_kills_per_player),             ''],
+    ['ch-ast',  mapEntries.map(([,m])=>m.avg_assists_pct),                  '%'],
+    ['ch-bs',   mapEntries.map(([,m])=>m.avg_betray_suicide),               ''],
+    ['ch-wk',   mapEntries.map(([,m])=>m.weapon_pct),                       '%'],
+    ['ch-gk',   mapEntries.map(([,m])=>m.grenade_pct),                      '%'],
+    ['ch-mk',   mapEntries.map(([,m])=>m.melee_pct),                        '%'],
+    ['ch-ok',   mapEntries.map(([,m])=>m.other_pct),                        '%'],
+  ];
+
+  // Defer chart creation one frame so the DOM is fully laid out before measuring widths.
+  // Use new Chart() directly (not makeChart) to guarantee responsive:false takes effect.
+  requestAnimationFrame(() => {
+    chartSpecs.forEach(([id, vals, suf]) => {
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const w = Math.round(canvas.closest('.chart-box-tall').getBoundingClientRect().width - 28);
+      canvas.width  = Math.max(300, w);
+      canvas.height = chartH;
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: mapNames,
+          datasets: [{ data: vals, backgroundColor: bCs.map(c=>c+'99'), borderColor: bCs, borderWidth: 1 }],
+        },
+        options: {
+          responsive: false,
+          maintainAspectRatio: false,
+          animation: false,
+          indexAxis: 'y',
+          plugins: { legend: { display: false }, tooltip: CHART_DEFAULTS.plugins.tooltip },
+          scales: {
+            y: { ticks: { color:'#7aacba', font:{ family:'Share Tech Mono', size:12 }, autoSkip:false }, grid:{ color:'rgba(26,58,68,.35)' } },
+            x: { ticks: { color:'#3a7080', font:{ family:'Share Tech Mono', size:12 }, callback: v => v+(suf||'') }, grid:{ color:'rgba(26,58,68,.35)' } },
+          },
+        },
+      });
+    });
   });
 
-  // Overview charts
-  const mapNames = mapEntries.map(([n]) => n);
-  const barColors = mapNames.map((_, i) => `hsl(${185 + i * 8}, 80%, ${45 + (i % 3) * 8}%)`);
-
-  makeChart('freq-chart', 'bar', mapNames,
-    [{ data: mapEntries.map(([,m]) => m.games), backgroundColor: barColors.map(c => c + '99'), borderColor: barColors, borderWidth: 1 }],
-    {
-      indexAxis: 'y',
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { color: '#7aacba', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: 'rgba(26,58,68,.4)' } },
-        x: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: 'rgba(26,58,68,.4)' } },
-      },
-    }
-  );
-
-  makeChart('kills-chart', 'bar', mapNames,
-    [{ data: mapEntries.map(([,m]) => m.avg_kills_per_player), backgroundColor: barColors.map(c => c + '99'), borderColor: barColors, borderWidth: 1 }],
-    {
-      indexAxis: 'y',
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { color: '#7aacba', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: 'rgba(26,58,68,.4)' } },
-        x: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: 'rgba(26,58,68,.4)' } },
-      },
-    }
-  );
-
-  // Map cards
-  const list = document.getElementById('maps-list');
-  list.innerHTML = mapEntries.map(([name, m]) =>
-    `<div class="map-card" id="card-${name.replace(/[^a-z0-9]/gi,'_')}" onclick="showMap('${name.replace(/'/g,"\\'")}')">
-      <div class="m-name">${name}</div>
-      <div class="m-games">${m.games} GAME${m.games !== 1 ? 'S' : ''}</div>
+  // ── Map cards ──
+  document.getElementById('maps-grid').innerHTML = mapEntries.map(([mn,m])=>
+    `<div class="map-card" id="mc-${mn.replace(/[^a-z0-9]/gi,'_')}" onclick="showMap('${mn.replace(/'/g,"\\'")}')">
+      <div class="mc-name">${mn}</div>
+      <div class="mc-g">${m.games} GAME${m.games!==1?'S':''}</div>
     </div>`
   ).join('');
-
-  // Summary table
-  document.getElementById('maps-body').innerHTML = mapEntries.map(([name, m]) => {
-    const topP = m.top_player;
-    const topC = PLAYER_COLORS[topP] || '#aaa';
-    return `<tr>
-      <td>${name}</td>
-      <td class="r dim">${m.games}</td>
-      <td class="r teal">${m.avg_kills_per_player}</td>
-      <td class="r dim">${m.avg_deaths_per_player}</td>
-      <td><span class="player-tag">${playerDot(topP)}${dn(topP, data)}</span></td>
-      ${players.map(p => `<td class="r">${m.player_avg_kills[p]}</td>`).join('')}
-    </tr>`;
-  }).join('');
 });
 
-function showMap(mapName) {
+function showMap(mn) {
   const data = globalData;
   if (!data) return;
-  const { maps, players } = data;
-  const m = maps[mapName];
+  const sd = getSeasonData(data);
+  const m = sd.maps[mn];
+  const { players } = data;
   if (!m) return;
 
-  // Highlight card
-  document.querySelectorAll('.map-card').forEach(c => c.classList.remove('map-selected'));
-  const cardId = 'card-' + mapName.replace(/[^a-z0-9]/gi, '_');
-  const card = document.getElementById(cardId);
-  if (card) card.classList.add('map-selected');
+  document.querySelectorAll('.map-card').forEach(c=>c.classList.remove('sel'));
+  document.getElementById('mc-'+mn.replace(/[^a-z0-9]/gi,'_'))?.classList.add('sel');
 
-  const topP = m.top_player;
-  const topC = PLAYER_COLORS[topP] || '#aaa';
-  const sortedPlayers = [...players].sort((a, b) => m.player_avg_kills[b] - m.player_avg_kills[a]);
+  const sortedP = [...players].sort();
+  const maxKills = Math.max(...players.map(p=>m.player_avg_kills[p]||0))||1;
+  const maxScore = Math.max(...players.map(p=>m.player_avg_score[p]||0))||1;
+  const mu_pairs = [['Blue','Red'],['Pink','Green'],['Gold','Brown']];
+  const tw = m.team_win_pct||{};
+  const mins = (m.avg_seconds/60).toFixed(1);
 
-  document.getElementById('map-detail-panel').innerHTML = `
+  const detailEl = document.getElementById('map-detail');
+
+  detailEl.innerHTML = `
     <div class="map-detail">
-      <div class="map-detail-name">${mapName}</div>
-      <div class="cards-grid" style="margin-bottom:18px">
+      <div class="map-detail-name">${mn}</div>
+      <div class="cards-grid" style="margin-bottom:16px">
         ${[
-          { num: m.games,                  lbl: 'GAMES PLAYED'        },
-          { num: m.avg_kills_per_player,   lbl: 'AVG KILLS / PLAYER'  },
-          { num: m.avg_deaths_per_player,  lbl: 'AVG DEATHS / PLAYER' },
-          { num: dn(topP, data),           lbl: 'TOP PERFORMER'       },
-        ].map(s => `<div class="stat-card"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join('')}
+          {v:m.games,               l:'GAMES PLAYED'},
+          {v:m.avg_kills_per_player,l:'AVG KILLS/PLAYER'},
+          {v:m.avg_assists_pct+'%', l:'ASSIST %'},
+          {v:mins+'m',              l:'AVG GAME TIME'},
+          {v:m.avg_betray_suicide,  l:'AVG BTR+SUI'},
+          {v:m.avg_mov,             l:'AVG MOV'},
+        ].map(s=>`<div class="stat-card"><div class="num">${s.v}</div><div class="lbl">${s.l}</div></div>`).join('')}
       </div>
-      <div style="font-size:.66rem;letter-spacing:.22em;color:var(--text-dim);margin-bottom:10px">PLAYER AVG KILLS ON THIS MAP</div>
-      ${sortedPlayers.map(p => {
-        const avg = m.player_avg_kills[p];
-        const maxAvg = Math.max(...players.map(pp => m.player_avg_kills[pp]));
-        const pct = maxAvg ? Math.round(avg / maxAvg * 100) : 0;
-        const pc = PLAYER_COLORS[p] || '#aaa';
-        return `<div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="player-tag" style="font-size:.82rem">${playerDot(p)}${dn(p, data)}</span>
-            <span style="color:${pc};font-family:var(--font-halo);font-size:.9rem">${avg}</span>
-          </div>
-          <div class="pbar-bg"><div class="pbar-fill" style="width:${pct}%;background:${pc};box-shadow:0 0 6px ${pc}44"></div></div>
-        </div>`;
-      }).join('')}
-    </div>
-  `;
+      <div class="cards-grid" style="margin-bottom:16px">
+        ${[
+          {v:m.weapon_pct+'%', l:'WEAPON KILL %'},
+          {v:m.grenade_pct+'%',l:'GRENADE KILL %'},
+          {v:m.melee_pct+'%',  l:'MELEE KILL %'},
+          {v:m.other_pct+'%',  l:'OTHER KILL %'},
+        ].map(s=>`<div class="stat-card"><div class="num">${s.v}</div><div class="lbl">${s.l}</div></div>`).join('')}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>AVG KILLS ON MAP</span></div>
+          ${sortedP.map(p=>{ const avg=m.player_avg_kills[p]||0; const c=pc(p,data); const pct=Math.round(avg/maxKills*100);
+            return `<div class="hbar-wrap">
+              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${c};font-family:var(--font-head);font-weight:700">${avg}</span></div>
+              <div class="hbar-bg"><div class="hbar-fill" style="width:${pct}%;background:${c}"></div></div>
+            </div>`; }).join('')}
+          <div class="section-hdr"><div class="hex"></div><span>AVG POINTS ON MAP</span></div>
+          ${sortedP.map(p=>{ const avg=m.player_avg_score[p]||0; const c=pc(p,data); const pct=Math.round(avg/maxScore*100);
+            return `<div class="hbar-wrap">
+              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${c};font-family:var(--font-head);font-weight:700">${avg}</span></div>
+              <div class="hbar-bg"><div class="hbar-fill" style="width:${pct}%;background:${c}"></div></div>
+            </div>`; }).join('')}
+        </div>
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>PLAYER WIN %</span></div>
+          ${sortedP.map(p=>{ const w=m.player_win_pct[p]||0; const c=pc(p,data);
+            return `<div class="hbar-wrap">
+              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</span></div>
+              <div class="hbar-bg"><div class="hbar-fill" style="width:${w}%;background:${c}"></div></div>
+            </div>`; }).join('')}
+          <div class="section-hdr"><div class="hex"></div><span>TEAM WIN %</span></div>
+          ${mu_pairs.flat().map(tn=>{ const w=tw[tn]||0; const c=teamColor(tn,data);
+            return `<div class="hbar-wrap">
+              <div class="hbar-label">${teamBadge(tn,c)}<span style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</span></div>
+              <div class="hbar-bg"><div class="hbar-fill" style="width:${w}%;background:${c}"></div></div>
+            </div>`; }).join('')}
+        </div>
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>KILL STYLE</span></div>
+          <canvas id="detail-ks" style="max-height:200px"></canvas>
+        </div>
+      </div>
+    </div>`;
+
+  // Kill styles pie for map detail
+  const tot = [m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct].reduce((s,v)=>s+v,0)||1;
+  makePie('detail-ks',
+    ['Weapon','Grenade','Melee','Other'].map((l,i)=>{
+      const vals=[m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct];
+      return `${l}: ${vals[i]}%`;
+    }),
+    [m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct],
+    ['#4488ff','#ff6a00','#44dd88','#c088ff']
+  );
 }
 </script>
 </body>

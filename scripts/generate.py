@@ -1,325 +1,918 @@
 """
-Reads S6 Carnage Report.xlsx and outputs docs/data/stats.json.
-Run after each session: python scripts/generate.py
+Reads S6 Carnage Report.xlsx → docs/data/stats.json
+Run after each session: python3 scripts/generate.py
 """
 import pandas as pd
 import json
 from pathlib import Path
+from collections import defaultdict
 
-ROOT = Path(__file__).parent.parent
-EXCEL_PATH = ROOT / 'data' / 'S6 Carnage Report.xlsx'
+ROOT        = Path(__file__).parent.parent
+EXCEL_PATH  = ROOT / 'data' / 'S6 Carnage Report.xlsx'
 OUTPUT_PATH = ROOT / 'docs' / 'data' / 'stats.json'
 
-TEAM_NAMES = {0: 'Red', 1: 'Blue', 2: 'Green', 7: 'Pink', 5: 'Gold', 6: 'Brown'}
+TEAM_NAMES  = {0: 'Red', 1: 'Blue', 2: 'Green', 7: 'Pink', 5: 'Gold', 6: 'Brown'}
 MATCHUP_NAMES = {1: 'Blue vs Red', 2: 'Pink vs Green', 3: 'Gold vs Brown'}
-
 TEAM_COLORS = {
     'Red': '#ff4444', 'Blue': '#4488ff', 'Green': '#44dd88',
     'Pink': '#ff88cc', 'Gold': '#ffcc00', 'Brown': '#cc8855',
 }
-
+PLAYER_COLORS = {
+    'BrundonDru':  '#ffcc00',
+    'HDTurkie':    '#4488ff',
+    'IKEMAN2684':  '#ff4444',
+    'walsh696969': '#44dd88',
+}
 DISPLAY_NAMES = {
-    'BrundonDru': 'Brundo',
-    'HDTurkie': 'Turkie',
-    'IKEMAN2684': 'Ike',
-    'walsh696969': 'Walsh',
+    'BrundonDru': 'Brundo', 'HDTurkie': 'HD',
+    'IKEMAN2684': 'Ike',    'walsh696969': 'Walsh',
+}
+MATCHUP_PAIRS = {
+    'Blue vs Red': ('Blue', 'Red'),
+    'Pink vs Green': ('Pink', 'Green'),
+    'Gold vs Brown': ('Gold', 'Brown'),
 }
 
-NAMED_MEDALS = [
-    'Assist', 'Avenger', 'Close Call', 'Comeback Kill', 'Double Kill',
-    'First Strike', 'Grenade Kill', 'Headshot', 'Kill', 'Kill from the Grave',
-    'Killing Frenzy', 'Killing Spree', 'Killjoy', 'Last Strike', 'Melee Kill',
-    'Protector', 'Reload This', 'Revenge', 'Rocket Kill', 'Sentinel Beam Kill',
-    'Snapshot', 'Sniper Spree', 'Triple Double', 'Sniper Kill',
-]
+CORE_SUFFIXES = {
+    'Team','Score','Kills','Deaths','Assists','Betrayals','Suicides',
+    'WeaponKills','GrenadeKills','MeleeKills','OtherKills',
+    'SecondsAlive','SecondsPlayed','Standing','TotalMedalCount',
+    'MostKillsInARow','KilledMostPlayer','KilledMostPlayerCount',
+    'MostKilledByPlayer','MostKilledByPlayerCount',
+    'MostUsedWeapon','MostUsedWeaponCount',
+    'OddballTime','HillTime','CamoKills','GrenadeSticks',
+    'FlagScores','FlagGrabs','BombScores','BombGrabs',
+    'KDR','AverageLife','DoubleKills','TripleKills','Overkills',
+    'Killtaculars','KillingSprees','RunningRiots','Rampages',
+    'Unfrigginbelievables','SniperSprees',
+}
 
 
-def _int(val):
-    try:
-        v = val if val == val else 0  # NaN guard
-        return int(v) if v is not None else 0
-    except (TypeError, ValueError):
-        return 0
+# ── helpers ────────────────────────────────────────────────────────────────
+def _i(v):
+    try: return int(v) if v == v and v is not None else 0
+    except: return 0
 
+def _f(v):
+    try: return round(float(v), 4) if v == v and v is not None else 0.0
+    except: return 0.0
 
-def _float(val):
-    try:
-        f = float(val) if val == val else 0.0
-        return round(f, 3)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _str(val):
-    return str(val) if val is not None and val == val else ''
-
+def _s(v):
+    return str(v) if v is not None and v == v else ''
 
 def get_players(df):
-    return [c.replace('_Kills', '') for c in df.columns if c.endswith('_Kills')]
+    return [c.replace('_Kills','') for c in df.columns if c.endswith('_Kills')]
+
+def get_medal_suffixes(df, players):
+    """Return ordered list of medal column suffixes (stripped of player prefix)."""
+    seen, out = set(), []
+    for p in players:
+        prefix = p + '_'
+        for col in df.columns:
+            if col.startswith(prefix):
+                suf = col[len(prefix):]
+                if suf not in CORE_SUFFIXES and suf not in seen:
+                    seen.add(suf)
+                    out.append(suf)
+    return out
 
 
-def build_games(df, players):
+# ── per-game construction ──────────────────────────────────────────────────
+def build_games(df, players, medal_suffixes, season_num):
     games = []
     for _, row in df.iterrows():
-        wt_code = _int(row.get('Winning_Team'))
-        lt_code = _int(row.get('Losing_Team'))
-        mu_code = _int(row.get('Matchup'))
-        map_name = _str(row.get('Map_Manual')) or _str(row.get('Map')) or 'Unknown'
+        wt_code = _i(row.get('Winning_Team'))
+        lt_code = _i(row.get('Losing_Team'))
+        mu_code = _i(row.get('Matchup'))
+        matchup = MATCHUP_NAMES.get(mu_code, f'Matchup {mu_code}')
+        wt_name = TEAM_NAMES.get(wt_code, str(wt_code))
+        lt_name = TEAM_NAMES.get(lt_code, str(lt_code))
 
-        game = {
-            'halonite_num_season': _int(row.get('Halonite_Num_Season')),
-            'game_num_season': _int(row.get('Game_Num_Season')),
-            'game_num_nite': _int(row.get('Game_Num_Nite')),
-            'matchup': MATCHUP_NAMES.get(mu_code, f'Matchup {mu_code}'),
-            'matchup_code': mu_code,
-            'winning_team': TEAM_NAMES.get(wt_code, str(wt_code)),
-            'losing_team': TEAM_NAMES.get(lt_code, str(lt_code)),
-            'map': map_name,
-            'timestamp': _str(row.get('Timestamp')),
-            'players': {},
-        }
+        sd_raw  = row.get('Set_Decider')
+        sw_raw  = row.get('Set_Winner')
+        set_dec = 1 if _i(sd_raw) == 1 else 0
+        set_win = TEAM_NAMES.get(_i(sw_raw), '') if set_dec else ''
 
+        # Collect raw per-player stats first
+        raw = {}
         for p in players:
-            medals = {}
-            for m in NAMED_MEDALS:
-                v = _int(row.get(f'{p}_{m}'))
-                if v > 0:
-                    medals[m] = v
-
-            tc = _int(row.get(f'{p}_Team'))
-            game['players'][p] = {
+            tc = _i(row.get(f'{p}_Team'))
+            raw[p] = {
                 'team': TEAM_NAMES.get(tc, str(tc)),
                 'team_code': tc,
-                'kills': _int(row.get(f'{p}_Kills')),
-                'deaths': _int(row.get(f'{p}_Deaths')),
-                'assists': _int(row.get(f'{p}_Assists')),
-                'kdr': _float(row.get(f'{p}_KDR')),
-                'score': _int(row.get(f'{p}_Score')),
-                'most_kills_in_row': _int(row.get(f'{p}_MostKillsInARow')),
-                'total_medals': _int(row.get(f'{p}_TotalMedalCount')),
-                'medals': medals,
+                'kills': _i(row.get(f'{p}_Kills')),
+                'deaths': _i(row.get(f'{p}_Deaths')),
+                'assists': _i(row.get(f'{p}_Assists')),
+                'betrayals': _i(row.get(f'{p}_Betrayals')),
+                'suicides': _i(row.get(f'{p}_Suicides')),
+                'weapon_kills': _i(row.get(f'{p}_WeaponKills')),
+                'grenade_kills': _i(row.get(f'{p}_GrenadeKills')),
+                'melee_kills': _i(row.get(f'{p}_MeleeKills')),
+                'other_kills': _i(row.get(f'{p}_OtherKills')),
+                'score': _i(row.get(f'{p}_Score')),
+                'kdr': _f(row.get(f'{p}_KDR')),
+                'most_kills_in_row': _i(row.get(f'{p}_MostKillsInARow')),
+                'total_medals': _i(row.get(f'{p}_TotalMedalCount')),
+                'avg_life': _f(row.get(f'{p}_AverageLife')),
+                'seconds_played': _i(row.get(f'{p}_SecondsPlayed')),
+                'medals': {suf: _i(row.get(f'{p}_{suf}'))
+                           for suf in medal_suffixes
+                           if _i(row.get(f'{p}_{suf}')) > 0},
             }
 
-        games.append(game)
-    return games
+        # Totals for QIKE
+        total_kills = sum(r['kills'] for r in raw.values()) or 1
+        total_score = sum(r['score'] for r in raw.values()) or 1
+        game_time   = max((raw[p]['seconds_played'] for p in players), default=0)
 
-
-def build_aggregates(games, players):
-    acc = {p: dict(
-        games=0, wins=0, losses=0,
-        total_kills=0, total_deaths=0, total_assists=0, total_medals=0,
-        best_kills=0, best_kdr=0.0,
-        kills_per_game=[], kdr_per_game=[], game_labels=[],
-        medal_totals={},
-    ) for p in players}
-
-    for g in games:
-        wt = g['winning_team']
-        label = f"G{g['game_num_season']}"
+        # Derived per-player: KC, QIKE, spreads
+        player_data = {}
         for p in players:
-            ps = g['players'].get(p)
-            if not ps:
-                continue
-            a = acc[p]
+            r = raw[p]
+            teammate_assists = sum(
+                raw[q]['assists'] for q in players
+                if q != p and raw[q]['team'] == r['team']
+            )
+            kc  = round(r['kills'] - 0.5 * teammate_assists + 0.5 * r['assists'], 2)
+            qike = round(0.5 * (r['kills'] / total_kills) + 0.5 * (r['score'] / total_score), 4)
+            kd_spread  = r['kills'] - r['deaths']
+            kcd_spread = round(kc - r['deaths'], 2)
+            combine = season_num is not None and season_num != 'Lifetime' and season_num < 6
+            sb = r['suicides'] + r['betrayals'] if combine else None
+
+            player_data[p] = {
+                **r,
+                'kc': kc,
+                'qike': qike,
+                'kd_spread': kd_spread,
+                'kcd_spread': kcd_spread,
+                'suicides_betrayals': sb,
+                'kills_against': {},  # filled below
+            }
+
+        # Kills-against opponents (uses KilledMostPlayer gamertag)
+        for p in players:
+            p_team = player_data[p]['team']
+            opponents = [q for q in players if q != p and player_data[q]['team'] != p_team]
+            kmp = _s(row.get(f'{p}_KilledMostPlayer'))
+            kmc = _i(row.get(f'{p}_KilledMostPlayerCount'))
+            kills = player_data[p]['kills']
+            ka = {q: 0 for q in players if q != p}
+            if kmp in opponents and kills > 0:
+                ka[kmp] = kmc
+                others = [o for o in opponents if o != kmp]
+                if others:
+                    ka[others[0]] = max(0, kills - kmc)
+            elif kills > 0 and opponents:
+                per, rem = divmod(kills, len(opponents))
+                for i, o in enumerate(opponents):
+                    ka[o] = per + (1 if i < rem else 0)
+            player_data[p]['kills_against'] = ka
+
+        # Team-level aggregates for this game
+        team_map = {}
+        for p in players:
+            t = player_data[p]['team']
+            if t not in team_map:
+                team_map[t] = {'kills': 0, 'score': 0, 'assists': 0,
+                               'deaths': 0, 'qike': 0.0, 'players': []}
+            tm = team_map[t]
+            tm['kills']   += player_data[p]['kills']
+            tm['score']   += player_data[p]['score']
+            tm['assists'] += player_data[p]['assists']
+            tm['deaths']  += player_data[p]['deaths']
+            tm['qike']    += player_data[p]['qike']
+            tm['players'].append(p)
+
+        wt_score = team_map.get(wt_name, {}).get('score', 0)
+        lt_score = team_map.get(lt_name, {}).get('score', 0)
+
+        games.append({
+            'game_num_season':   _i(row.get('Game_Num_Season')),
+            'game_num_lifetime': _i(row.get('Game_Num_Lifetime')),
+            'halonite_num':      _i(row.get('Halonite_Num_Season')),
+            'game_num_nite':     _i(row.get('Game_Num_Nite')),
+            'season':            _i(row.get('Season')),
+            'matchup':           matchup,
+            'matchup_code':      mu_code,
+            'winning_team':      wt_name,
+            'losing_team':       lt_name,
+            'winning_score':     wt_score,
+            'losing_score':      lt_score,
+            'mov':               wt_score - lt_score,
+            'map':               _s(row.get('Map_Manual')) or _s(row.get('Map')) or 'Unknown',
+            'timestamp':         _s(row.get('Timestamp')),
+            'seconds_played':    game_time,
+            'set_decider':       set_dec,
+            'set_winner':        set_win,
+            'total_kills':       total_kills,
+            'total_score':       total_score,
+            'players':           player_data,
+            'teams':             team_map,
+        })
+
+    return sorted(games, key=lambda g: g['game_num_season'])
+
+
+# ── summary ────────────────────────────────────────────────────────────────
+def build_summary(games, players, season_num):
+    total_seconds = sum(g['seconds_played'] for g in games)
+    sets = sum(1 for g in games if g['set_decider'])
+
+    matchup_games = defaultdict(int)
+    matchup_seconds = defaultdict(int)
+    for g in games:
+        matchup_games[g['matchup']] += 1
+        matchup_seconds[g['matchup']] += g['seconds_played']
+
+    totals = defaultdict(int)
+    for g in games:
+        for p in players:
+            ps = g['players'][p]
+            totals['kills']        += ps['kills']
+            totals['assists']      += ps['assists']
+            totals['deaths']       += ps['deaths']
+            totals['betrayals']    += ps['betrayals']
+            totals['suicides']     += ps['suicides']
+            totals['weapon_kills'] += ps['weapon_kills']
+            totals['grenade_kills']+= ps['grenade_kills']
+            totals['melee_kills']  += ps['melee_kills']
+            totals['other_kills']  += ps['other_kills']
+            totals['medals']       += ps['total_medals']
+            totals['score']        += ps['score']
+
+    total_nites = len({g['halonite_num'] for g in games})
+    return {
+        'total_games':    len(games),
+        'total_sets':     sets,
+        'total_nites':    total_nites,
+        'total_seconds':  total_seconds,
+        'matchup_games':  dict(matchup_games),
+        'matchup_seconds':dict(matchup_seconds),
+        'combine_suicides': season_num != 6,
+        **{k: int(v) for k, v in totals.items()},
+    }
+
+
+# ── player aggregates ──────────────────────────────────────────────────────
+def build_aggregates(games, players, medal_suffixes, season_num):
+    agg = {p: defaultdict(lambda: 0) for p in players}
+    med = {p: defaultdict(int) for p in players}
+    ka_agg = {p: defaultdict(int) for p in players}   # kills_against accumulator
+    cum = {p: {k: [] for k in [
+        'wl_spread','set_wl_spread','kills','deaths','assists','score',
+        'kd_spread','qike','weapon_kills','grenade_kills','melee_kills','other_kills',
+    ]} for p in players}
+    labels = []
+
+    # Running totals
+    run = {p: defaultdict(lambda: 0) for p in players}
+    set_run = {p: defaultdict(lambda: 0) for p in players}
+
+    use_lifetime_label = season_num in (None, 'Lifetime')
+    for g in games:
+        labels.append(g['game_num_lifetime'] if use_lifetime_label else g['game_num_season'])
+        wt = g['winning_team']
+        sw = g['set_winner']
+
+        for p in players:
+            ps = g['players'][p]
+            a  = agg[p]
             a['games'] += 1
-            if ps['team'] == wt:
-                a['wins'] += 1
-            else:
-                a['losses'] += 1
-            a['total_kills'] += ps['kills']
-            a['total_deaths'] += ps['deaths']
-            a['total_assists'] += ps['assists']
-            a['total_medals'] += ps['total_medals']
+            won = (ps['team'] == wt)
+            a['wins']   += int(won)
+            a['losses'] += int(not won)
+            a['kills']  += ps['kills']
+            a['deaths'] += ps['deaths']
+            a['assists'] += ps['assists']
+            a['betrayals'] += ps['betrayals']
+            a['suicides'] += ps['suicides']
+            a['weapon_kills'] += ps['weapon_kills']
+            a['grenade_kills'] += ps['grenade_kills']
+            a['melee_kills']  += ps['melee_kills']
+            a['other_kills']  += ps['other_kills']
+            a['score']  += ps['score']
+            a['medals'] += ps['total_medals']
+            a['kc']     += ps['kc']
+            a['qike']   += ps['qike']
             a['best_kills'] = max(a['best_kills'], ps['kills'])
-            a['best_kdr'] = max(a['best_kdr'], ps['kdr'])
-            a['kills_per_game'].append(ps['kills'])
-            a['kdr_per_game'].append(ps['kdr'])
-            a['game_labels'].append(label)
-            for medal, cnt in ps['medals'].items():
-                a['medal_totals'][medal] = a['medal_totals'].get(medal, 0) + cnt
+            a['best_kdr']   = max(a['best_kdr'],   ps['kdr'])
+            a['best_score'] = max(a['best_score'],  ps['score'])
+            # Medal totals
+            for suf, cnt in ps['medals'].items():
+                med[p][suf] += cnt
+            # Kills against each opponent
+            for opp, cnt in ps.get('kills_against', {}).items():
+                ka_agg[p][opp] += cnt
+            # Set wins
+            if g['set_decider'] and sw:
+                sw_won = (ps['team'] == sw)
+                a['set_wins']   += int(sw_won)
+                a['set_losses'] += int(not sw_won)
+                set_run[p]['spread'] += 1 if sw_won else -1
+
+            # Cumulative
+            run[p]['wl']    += 1 if won else -1
+            run[p]['kills'] += ps['kills']
+            run[p]['deaths']+= ps['deaths']
+            run[p]['assists']+= ps['assists']
+            run[p]['score'] += ps['score']
+            run[p]['kd']    += ps['kd_spread']
+            run[p]['qike']  += ps['qike']
+            run[p]['wk']    += ps['weapon_kills']
+            run[p]['gk']    += ps['grenade_kills']
+            run[p]['mk']    += ps['melee_kills']
+            run[p]['ok']    += ps['other_kills']
+
+            c = cum[p]
+            c['wl_spread'].append(run[p]['wl'])
+            c['set_wl_spread'].append(set_run[p]['spread'])
+            c['kills'].append(run[p]['kills'])
+            c['deaths'].append(run[p]['deaths'])
+            c['assists'].append(run[p]['assists'])
+            c['score'].append(run[p]['score'])
+            c['kd_spread'].append(run[p]['kd'])
+            c['qike'].append(round(run[p]['qike'], 4))
+            c['weapon_kills'].append(run[p]['wk'])
+            c['grenade_kills'].append(run[p]['gk'])
+            c['melee_kills'].append(run[p]['mk'])
+            c['other_kills'].append(run[p]['ok'])
 
     result = {}
     for p in players:
-        a = acc[p]
-        gp = a['games'] or 1
-        td = a['total_deaths'] or 1
+        a = agg[p]
+        g = a['games'] or 1
+        d = a['deaths'] or 1
         result[p] = {
-            'games': a['games'],
-            'wins': a['wins'],
-            'losses': a['losses'],
-            'win_pct': round(a['wins'] / gp * 100, 1),
-            'total_kills': a['total_kills'],
-            'total_deaths': a['total_deaths'],
-            'total_assists': a['total_assists'],
-            'total_medals': a['total_medals'],
-            'kdr': round(a['total_kills'] / td, 3),
-            'avg_kills': round(a['total_kills'] / gp, 2),
-            'avg_deaths': round(a['total_deaths'] / gp, 2),
-            'best_kills': a['best_kills'],
-            'best_kdr': round(a['best_kdr'], 3),
-            'kills_per_game': a['kills_per_game'],
-            'kdr_per_game': a['kdr_per_game'],
-            'game_labels': a['game_labels'],
-            'top_medals': sorted(a['medal_totals'].items(), key=lambda x: -x[1])[:8],
+            'games':    int(a['games']),
+            'wins':     int(a['wins']),
+            'losses':   int(a['losses']),
+            'wl_spread':int(a['wins'] - a['losses']),
+            'win_pct':  round(a['wins'] / g * 100, 1),
+            'set_wins': int(a['set_wins']),
+            'set_losses':int(a['set_losses']),
+            'set_wl_spread': int(a['set_wins'] - a['set_losses']),
+            'set_win_pct': round(a['set_wins'] / (a['set_wins']+a['set_losses'] or 1) * 100, 1),
+            'total_kills':  int(a['kills']),
+            'total_deaths': int(a['deaths']),
+            'total_assists':int(a['assists']),
+            'total_betrayals': int(a['betrayals']),
+            'total_suicides':  int(a['suicides']),
+            'total_weapon_kills':  int(a['weapon_kills']),
+            'total_grenade_kills': int(a['grenade_kills']),
+            'total_melee_kills':   int(a['melee_kills']),
+            'total_other_kills':   int(a['other_kills']),
+            'total_score':  int(a['score']),
+            'total_medals': int(a['medals']),
+            'total_kc':     round(a['kc'], 2),
+            'total_qike':   round(a['qike'], 4),
+            'kdr':          round(a['kills'] / d, 3),
+            'avg_kills':    round(a['kills'] / g, 2),
+            'avg_deaths':   round(a['deaths'] / g, 2),
+            'avg_score':    round(a['score'] / g, 2),
+            'avg_kc':       round(a['kc'] / g, 2),
+            'avg_qike':     round(a['qike'] / g, 4),
+            'kd_spread':    int(a['kills'] - a['deaths']),
+            'kcd_spread':   round(a['kc'] - a['deaths'], 2),
+            'best_kills':   int(a['best_kills']),
+            'best_kdr':     round(a['best_kdr'], 3),
+            'best_score':   int(a['best_score']),
+            'combine_suicides': season_num != 6,
+            'medals': dict(med[p]),
+            'kills_against': {opp: int(ka_agg[p][opp]) for opp in players if opp != p},
+            'cumulative': cum[p],
+            'game_labels': labels,
         }
     return result
 
 
-def build_teams(games, players):
-    teams = {}
+# ── team aggregates ────────────────────────────────────────────────────────
+def build_teams(games, players, season_num=None):
+    acc = defaultdict(lambda: defaultdict(lambda: 0))
+    cum = {}
+    run = defaultdict(lambda: defaultdict(lambda: 0))
+    labels = []
+
+    use_lifetime_label = season_num in (None, 'Lifetime')
     for g in games:
-        for side in ['winning_team', 'losing_team']:
-            t = g[side]
-            if t not in teams:
-                teams[t] = dict(wins=0, losses=0, games=0, total_kills=0, total_deaths=0)
-        teams[g['winning_team']]['wins'] += 1
-        teams[g['winning_team']]['games'] += 1
-        teams[g['losing_team']]['losses'] += 1
-        teams[g['losing_team']]['games'] += 1
-        for p, ps in g['players'].items():
-            t = ps['team']
-            if t in teams:
-                teams[t]['total_kills'] += ps['kills']
-                teams[t]['total_deaths'] += ps['deaths']
+        labels.append(g['game_num_lifetime'] if use_lifetime_label else g['game_num_season'])
+        wt = g['winning_team']
+        sw = g['set_winner']
+
+        for p in players:
+            ps = g['players'][p]
+            t  = ps['team']
+            a  = acc[t]
+            won = (t == wt)
+            a['games']   += 1
+            a['wins']    += int(won)
+            a['losses']  += int(not won)
+            a['kills']   += ps['kills']
+            a['deaths']  += ps['deaths']
+            a['assists'] += ps['assists']
+            a['score']   += ps['score']
+            a['kc']      += ps['kc']
+            a['qike']    += ps['qike']
+            a['weapon_kills']  += ps['weapon_kills']
+            a['grenade_kills'] += ps['grenade_kills']
+            a['melee_kills']   += ps['melee_kills']
+            a['other_kills']   += ps['other_kills']
+            a['betrayals']     += ps['betrayals']
+            a['suicides']      += ps['suicides']
+            if won:
+                # total_mov is double-counted (once per player); divide by wins (also double-counted) → correct
+                a['total_mov'] += g['mov']
+            if g['set_decider'] and sw:
+                a['set_wins']   += int(t == sw)
+                a['set_losses'] += int(t != sw)
+
+            if t not in cum:
+                cum[t] = {'wl_spread': [], 'set_wl_spread': [], 'qike': []}
+            run[t]['wl']      += 1 if won else -1
+            run[t]['qike']    += ps['qike']
+            run[t]['set_wl']  += (1 if t == sw else -1) if (g['set_decider'] and sw) else 0
+
+        # Append cumulative after processing all players in game
+        for t in list(cum.keys()):
+            cum[t]['wl_spread'].append(run[t]['wl'] // 2)  # 2 players per team → halve
+            cum[t]['set_wl_spread'].append(run[t]['set_wl'] // 2)
+            cum[t]['qike'].append(round(run[t]['qike'], 4))
 
     result = {}
-    for t, d in teams.items():
-        g = d['games'] or 1
+    for t, a in acc.items():
+        g_count = a['games'] // 2 or 1  # double-counted
+        wins    = a['wins'] // 2
+        losses  = a['losses'] // 2
+        deaths  = a['deaths'] or 1
+        # set wins are also double-counted
+        sw_ = a['set_wins'] // 2
+        sl_ = a['set_losses'] // 2
         result[t] = {
-            'color': TEAM_COLORS.get(t, '#aaaaaa'),
-            'wins': d['wins'],
-            'losses': d['losses'],
-            'games': d['games'],
-            'win_pct': round(d['wins'] / g * 100, 1),
-            'avg_kills': round(d['total_kills'] / g, 1),
-            'avg_deaths': round(d['total_deaths'] / g, 1),
+            'color':       TEAM_COLORS.get(t, '#aaa'),
+            'games':       g_count,
+            'wins':        wins,
+            'losses':      losses,
+            'wl_spread':   wins - losses,
+            'win_pct':     round(wins / g_count * 100, 1),
+            'set_wins':    sw_,
+            'set_losses':  sl_,
+            'set_wl_spread': sw_ - sl_,
+            'set_win_pct': round(sw_ / (sw_ + sl_ or 1) * 100, 1),
+            'total_kills':  a['kills'],
+            'total_deaths': a['deaths'],
+            'total_assists':a['assists'],
+            'total_score':  a['score'],
+            'total_kc':     round(a['kc'], 2),
+            'total_qike':   round(a['qike'], 4),
+            'kdr':          round(a['kills'] / deaths, 3),
+            'kd_spread':    a['kills'] - a['deaths'],
+            'avg_kills':    round(a['kills'] / g_count, 2),
+            'avg_deaths':   round(a['deaths'] / g_count, 2),
+            'avg_score':    round(a['score'] / g_count, 2),
+            'avg_qike':     round(a['qike'] / (a['games'] or 1), 4),
+            # a['wins'] and a['total_mov'] are both double-counted → division cancels correctly
+            'avg_mov':      round(a['total_mov'] / (a['wins'] or 1), 2),
+            'weapon_kills':  a['weapon_kills'],
+            'grenade_kills': a['grenade_kills'],
+            'melee_kills':   a['melee_kills'],
+            'other_kills':   a['other_kills'],
+            'betrayals':     a['betrayals'],
+            'suicides':      a['suicides'],
+            'cumulative':    cum.get(t, {}),
+            'game_labels':   labels,
         }
     return result
 
 
+# ── matchups ───────────────────────────────────────────────────────────────
 def build_matchups(games):
-    matchups = {}
+    acc = defaultdict(lambda: defaultdict(lambda: 0))
     for g in games:
-        m = g['matchup']
-        if m not in matchups:
-            parts = m.split(' vs ')
-            matchups[m] = {
-                'team_a': parts[0] if len(parts) == 2 else '',
-                'team_b': parts[1] if len(parts) == 2 else '',
-                'team_a_wins': 0,
-                'team_b_wins': 0,
-                'games': 0,
-            }
-        matchups[m]['games'] += 1
-        wt = g['winning_team']
-        if wt == matchups[m]['team_a']:
-            matchups[m]['team_a_wins'] += 1
-        elif wt == matchups[m]['team_b']:
-            matchups[m]['team_b_wins'] += 1
-    return matchups
+        m  = g['matchup']
+        ta, tb = MATCHUP_PAIRS.get(m, ('', ''))
+        acc[m]['games'] += 1
+        acc[m]['seconds'] += g['seconds_played']
+        if g['winning_team'] == ta:
+            acc[m]['a_wins'] += 1
+        elif g['winning_team'] == tb:
+            acc[m]['b_wins'] += 1
+        if g['set_decider'] and g['set_winner']:
+            sw = g['set_winner']
+            if sw == ta:   acc[m]['a_set_wins'] += 1
+            elif sw == tb: acc[m]['b_set_wins'] += 1
+
+    result = {}
+    for m, a in acc.items():
+        ta, tb = MATCHUP_PAIRS.get(m, ('', ''))
+        g = a['games'] or 1
+        result[m] = {
+            'team_a': ta, 'team_b': tb,
+            'games':  a['games'],
+            'seconds':a['seconds'],
+            'a_wins': a['a_wins'], 'b_wins': a['b_wins'],
+            'a_set_wins': a['a_set_wins'], 'b_set_wins': a['b_set_wins'],
+            'a_win_pct': round(a['a_wins'] / g * 100, 1),
+            'b_win_pct': round(a['b_wins'] / g * 100, 1),
+        }
+    return result
 
 
+# ── maps ───────────────────────────────────────────────────────────────────
 def build_maps(games, players):
-    maps = {}
+    acc = defaultdict(lambda: defaultdict(lambda: 0))
+    p_kills = defaultdict(lambda: defaultdict(int))
+    p_score = defaultdict(lambda: defaultdict(int))
+    p_games = defaultdict(lambda: defaultdict(int))
+    p_wins  = defaultdict(lambda: defaultdict(int))
+    team_wins  = defaultdict(lambda: defaultdict(int))
+    team_games = defaultdict(lambda: defaultdict(int))
+    mu_games   = defaultdict(lambda: defaultdict(int))   # [map][matchup] = game count
+    mu_wins    = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # [map][mu][team]
+
     for g in games:
         mn = g['map']
-        if not mn or mn == 'Unknown':
-            continue
-        if mn not in maps:
-            maps[mn] = dict(
-                games=0, total_kills=0, total_deaths=0,
-                player_kills={p: 0 for p in players},
-                player_games={p: 0 for p in players},
-            )
-        m = maps[mn]
-        m['games'] += 1
+        if not mn or mn == 'Unknown': continue
+        acc[mn]['games']   += 1
+        acc[mn]['seconds'] += g['seconds_played']
+        acc[mn]['mov_sum'] += g['mov']
+        wt = g['winning_team']
+        lt = g['losing_team']
+        mu = g['matchup']
+        team_wins[mn][wt]  += 1
+        team_games[mn][wt] += 1
+        team_games[mn][lt] += 1
+        mu_games[mn][mu]   += 1
+        mu_wins[mn][mu][wt]+= 1
+
         for p in players:
-            ps = g['players'].get(p)
-            if not ps:
-                continue
-            m['total_kills'] += ps['kills']
-            m['total_deaths'] += ps['deaths']
-            m['player_kills'][p] += ps['kills']
-            m['player_games'][p] += 1
+            ps = g['players'][p]
+            acc[mn]['kills']        += ps['kills']
+            acc[mn]['assists']      += ps['assists']
+            acc[mn]['deaths']       += ps['deaths']
+            acc[mn]['weapon_kills'] += ps['weapon_kills']
+            acc[mn]['grenade_kills']+= ps['grenade_kills']
+            acc[mn]['melee_kills']  += ps['melee_kills']
+            acc[mn]['other_kills']  += ps['other_kills']
+            acc[mn]['betrayals']    += ps['betrayals']
+            acc[mn]['suicides']     += ps['suicides']
+            p_kills[mn][p] += ps['kills']
+            p_score[mn][p] += ps['score']
+            p_games[mn][p] += 1
+            p_wins[mn][p]  += int(ps['team'] == wt)
 
     result = {}
-    for mn, m in sorted(maps.items(), key=lambda x: -x[1]['games']):
-        g = m['games'] or 1
-        n = len(players)
-        player_avg = {p: round(m['player_kills'][p] / (m['player_games'][p] or 1), 2) for p in players}
+    for mn in sorted(acc.keys()):
+        a  = acc[mn]
+        g  = a['games'] or 1
+        n  = len(players)
+        tk = a['kills'] or 1
+        player_avg_kills = {p: round(p_kills[mn][p] / (p_games[mn][p] or 1), 2) for p in players}
+        player_avg_score = {p: round(p_score[mn][p] / (p_games[mn][p] or 1), 2) for p in players}
+        player_win_pct   = {p: round(p_wins[mn][p] / (p_games[mn][p] or 1) * 100, 1) for p in players}
+        tw = {t: round(team_wins[mn][t] / (team_games[mn][t] or 1) * 100, 1)
+              for t in team_games[mn]}
+        # Per-matchup breakdown
+        mu_breakdown = {}
+        for mu_name, g_cnt in mu_games[mn].items():
+            ta, tb = MATCHUP_PAIRS.get(mu_name, ('', ''))
+            mu_breakdown[mu_name] = {
+                'games':    g_cnt,
+                'a_wins':   mu_wins[mn][mu_name].get(ta, 0),
+                'b_wins':   mu_wins[mn][mu_name].get(tb, 0),
+                'a_win_pct':round(mu_wins[mn][mu_name].get(ta,0)/(g_cnt or 1)*100,1),
+                'b_win_pct':round(mu_wins[mn][mu_name].get(tb,0)/(g_cnt or 1)*100,1),
+            }
         result[mn] = {
-            'games': m['games'],
-            'avg_kills_per_player': round(m['total_kills'] / g / n, 2),
-            'avg_deaths_per_player': round(m['total_deaths'] / g / n, 2),
-            'player_avg_kills': player_avg,
-            'top_player': max(player_avg, key=player_avg.get),
+            'games':       g,
+            'avg_mov':     round(a['mov_sum'] / g, 1),
+            'avg_seconds': round(a['seconds'] / g),
+            'avg_kills_per_player':  round(a['kills'] / g / n, 2),
+            'avg_deaths_per_player': round(a['deaths'] / g / n, 2),
+            'avg_assists_pct':       round(a['assists'] / tk * 100, 1),
+            'avg_betray_suicide':    round((a['betrayals'] + a['suicides']) / g, 2),
+            'weapon_pct':    round(a['weapon_kills'] / tk * 100, 1),
+            'grenade_pct':   round(a['grenade_kills'] / tk * 100, 1),
+            'melee_pct':     round(a['melee_kills'] / tk * 100, 1),
+            'other_pct':     round(a['other_kills'] / tk * 100, 1),
+            'player_avg_kills': player_avg_kills,
+            'player_avg_score': player_avg_score,
+            'player_win_pct':   player_win_pct,
+            'team_win_pct':     tw,
+            'mu_breakdown':     mu_breakdown,
+            'top_player': max(player_avg_kills, key=player_avg_kills.get),
         }
     return result
 
 
-def build_records(games, players):
-    slots = {
-        'most_kills':        ('kills', 'Most Kills in a Game'),
-        'best_kdr':          ('kdr', 'Best KDR in a Game'),
-        'longest_streak':    ('most_kills_in_row', 'Longest Kill Streak'),
-        'most_medals':       ('total_medals', 'Most Medals in a Game'),
-        'most_assists':      ('assists', 'Most Assists in a Game'),
-    }
-    medal_slots = {
-        'most_double_kills': ('Double Kill', 'Most Double Kills in a Game'),
-        'most_headshots':    ('Headshot', 'Most Headshots in a Game'),
-        'most_sniper_kills': ('Sniper Kill', 'Most Sniper Kills in a Game'),
-    }
+# ── halo nites ─────────────────────────────────────────────────────────────
+def build_halo_nites(games, players, season_num):
+    nites = defaultdict(list)
+    for g in games:
+        nites[g['halonite_num']].append(g)
 
-    records = {k: {'label': v[1], 'player': '', 'display': '', 'value': 0, 'game_num': 0, 'map': ''}
-               for k, v in {**slots, **medal_slots}.items()}
+    result = []
+    for nite_num in sorted(nites.keys()):
+        nite_games = nites[nite_num]
+        p_stats = {p: defaultdict(lambda: 0) for p in players}
+        game_log = []
 
-    def check(key, player, value, gnum, gmap):
-        if value > records[key]['value']:
-            records[key].update(player=player, display=DISPLAY_NAMES.get(player, player),
-                                value=value, game_num=gnum, map=gmap)
+        for g in nite_games:
+            game_log.append({
+                'game_num_season': g['game_num_season'],
+                'game_num_nite':   g['game_num_nite'],
+                'map':             g['map'],
+                'matchup':         g['matchup'],
+                'winning_team':    g['winning_team'],
+                'seconds_played':  g['seconds_played'],
+            })
+            wt = g['winning_team']
+            sw = g['set_winner']
+            for p in players:
+                ps = g['players'][p]
+                pst = p_stats[p]
+                pst['games']        += 1
+                pst['kills']        += ps['kills']
+                pst['deaths']       += ps['deaths']
+                pst['assists']      += ps['assists']
+                pst['score']        += ps['score']
+                pst['kc']           += ps['kc']
+                pst['kd_spread']    += ps['kd_spread']
+                pst['kcd_spread']   += ps['kcd_spread']
+                pst['qike']         += ps['qike']
+                pst['weapon_kills'] += ps['weapon_kills']
+                pst['grenade_kills']+= ps['grenade_kills']
+                pst['melee_kills']  += ps['melee_kills']
+                pst['other_kills']  += ps['other_kills']
+                pst['medals']       += ps['total_medals']
+                pst['betrayals']    += ps['betrayals']
+                pst['suicides']     += ps['suicides']
+                pst['wins']         += int(ps['team'] == wt)
+                pst['losses']       += int(ps['team'] != wt)
+                if g['set_decider'] and sw:
+                    pst['set_wins']  += int(ps['team'] == sw)
+                    pst['set_losses']+= int(ps['team'] != sw)
+
+        player_summary = {}
+        for p in players:
+            st = p_stats[p]
+            g  = st['games'] or 1
+            player_summary[p] = {
+                'games':        int(st['games']),
+                'wins':         int(st['wins']),
+                'losses':       int(st['losses']),
+                'wl_spread':    int(st['wins'] - st['losses']),
+                'win_pct':      round(st['wins'] / g * 100, 1),
+                'set_wins':     int(st['set_wins']),
+                'set_losses':   int(st['set_losses']),
+                'score':        int(st['score']),
+                'kills':        int(st['kills']),
+                'deaths':       int(st['deaths']),
+                'assists':      int(st['assists']),
+                'kd_spread':    int(st['kd_spread']),
+                'kc':           round(st['kc'], 2),
+                'kcd_spread':   round(st['kcd_spread'], 2),
+                'avg_qike':     round(st['qike'] / g, 4),
+                'weapon_kills': int(st['weapon_kills']),
+                'grenade_kills':int(st['grenade_kills']),
+                'melee_kills':  int(st['melee_kills']),
+                'other_kills':  int(st['other_kills']),
+                'medals':       int(st['medals']),
+                'betrayals':    int(st['betrayals']),
+                'suicides':     int(st['suicides']),
+                'combine_suicides': season_num != 6,
+            }
+
+        result.append({
+            'nite_num':     nite_num,
+            'game_count':   len(nite_games),
+            'game_log':     game_log,
+            'player_stats': player_summary,
+        })
+    return result
+
+
+# ── records ────────────────────────────────────────────────────────────────
+def build_records(games, players, season_num):
+    combine = season_num != 6
+
+    def make_tracker(minimize=False):
+        return {'val': float('inf') if minimize else float('-inf'), 'instances': []}
+
+    def check(tracker, val, info, minimize=False):
+        if val is None: return
+        better = (val < tracker['val']) if minimize else (val > tracker['val'])
+        if better:
+            tracker['val'] = val
+            tracker['instances'] = [info]
+        elif val == tracker['val']:
+            tracker['instances'].append(info)
+
+    # Player positive records
+    pp = {k: make_tracker() for k in [
+        'most_points','most_kills','most_assists','fewest_deaths',
+        'most_weapon_kills','most_grenade_kills','most_melee_kills','most_other_kills',
+        'greatest_spread','longest_spree',
+    ]}
+    pp['fewest_deaths'] = make_tracker(minimize=True)
+
+    # Player negative records
+    pn = {k: make_tracker(True if k != 'most_deaths' and k != 'most_betrayals' and k != 'most_suicides' and k != 'most_betray_suicide' else False) for k in [
+        'fewest_points','fewest_kills','most_deaths','lowest_spread',
+        'most_betrayals','most_suicides','most_betray_suicide',
+    ]}
+    pn['fewest_points']  = make_tracker(minimize=True)
+    pn['fewest_kills']   = make_tracker(minimize=True)
+    pn['lowest_spread']  = make_tracker(minimize=True)
+    pn['most_deaths']    = make_tracker(minimize=False)
+    pn['most_betrayals'] = make_tracker(minimize=False)
+    pn['most_suicides']  = make_tracker(minimize=False)
+    pn['most_betray_suicide'] = make_tracker(minimize=False)
+
+    # Team positive records
+    tp = {k: make_tracker() for k in ['most_kills','most_assists','fewest_deaths','greatest_spread']}
+    tp['fewest_deaths'] = make_tracker(minimize=True)
+
+    # Team negative records
+    tn = {k: make_tracker(minimize=(k in ['fewest_points','fewest_kills','lowest_spread'])) for k in [
+        'fewest_points','fewest_kills','most_deaths','lowest_spread',
+    ]}
+    tn['most_deaths'] = make_tracker(minimize=False)
 
     for g in games:
-        gn = g['game_num_season']
-        gm = g['map']
-        for p in players:
-            ps = g['players'].get(p)
-            if not ps:
-                continue
-            for key, (field, _) in slots.items():
-                check(key, p, _float(ps[field]) if field == 'kdr' else _int(ps[field]), gn, gm)
-            for key, (medal, _) in medal_slots.items():
-                check(key, p, ps['medals'].get(medal, 0), gn, gm)
+        info_base = {
+            'game_num_season': g['game_num_season'],
+            'halonite_num':    g['halonite_num'],
+            'season':          g['season'],
+            'map':             g['map'],
+            'matchup':         g['matchup'],
+        }
 
-    return records
+        for p in players:
+            ps = g['players'][p]
+            info = {**info_base, 'player': p, 'display': DISPLAY_NAMES.get(p, p)}
+            sb = ps['betrayals'] + ps['suicides']
+
+            check(pp['most_points'],       ps['score'],             info)
+            check(pp['most_kills'],        ps['kills'],             info)
+            check(pp['most_assists'],      ps['assists'],           info)
+            check(pp['fewest_deaths'],     ps['deaths'],            info, minimize=True)
+            check(pp['most_weapon_kills'], ps['weapon_kills'],      info)
+            check(pp['most_grenade_kills'],ps['grenade_kills'],     info)
+            check(pp['most_melee_kills'],  ps['melee_kills'],       info)
+            check(pp['most_other_kills'],  ps['other_kills'],       info)
+            check(pp['greatest_spread'],   ps['kd_spread'],         info)
+            check(pp['longest_spree'],     ps['most_kills_in_row'], info)
+
+            check(pn['fewest_points'],  ps['score'],      info, minimize=True)
+            check(pn['fewest_kills'],   ps['kills'],      info, minimize=True)
+            check(pn['most_deaths'],    ps['deaths'],     info)
+            check(pn['lowest_spread'],  ps['kd_spread'],  info, minimize=True)
+            if combine:
+                check(pn['most_betray_suicide'], sb, info)
+            else:
+                check(pn['most_betrayals'], ps['betrayals'], info)
+                check(pn['most_suicides'],  ps['suicides'],  info)
+
+        # Team records
+        for team_name, tm in g['teams'].items():
+            wins = sum(1 for p in tm['players'] if g['players'][p]['team'] == g['winning_team'])
+            spread = tm['kills'] - tm['deaths']
+            tinfo = {**info_base, 'team': team_name}
+            check(tp['most_kills'],      tm['kills'],   tinfo)
+            check(tp['most_assists'],    tm['assists'],  tinfo)
+            check(tp['fewest_deaths'],   tm['deaths'],  tinfo, minimize=True)
+            check(tp['greatest_spread'], spread,        tinfo)
+            check(tn['fewest_points'],   tm['score'],   tinfo, minimize=True)
+            check(tn['fewest_kills'],    tm['kills'],   tinfo, minimize=True)
+            check(tn['most_deaths'],     tm['deaths'],  tinfo)
+            check(tn['lowest_spread'],   spread,        tinfo, minimize=True)
+
+    def finalize(tracker):
+        return {'value': tracker['val'] if tracker['val'] not in (float('inf'), float('-inf')) else None,
+                'instances': tracker['instances']}
+
+    return {
+        'player_positive': {k: finalize(v) for k, v in pp.items()},
+        'player_negative': {k: finalize(v) for k, v in pn.items()},
+        'team_positive':   {k: finalize(v) for k, v in tp.items()},
+        'team_negative':   {k: finalize(v) for k, v in tn.items()},
+        'combine_suicides': combine,
+    }
+
+
+# ── personal bests ──────────────────────────────────────────────────────────
+def build_personal_bests(games, players):
+    categories = {
+        'most_kills': ('kills', False),
+        'most_points': ('score', False),
+        'most_assists': ('assists', False),
+        'best_kdr': ('kdr', False),
+        'best_spread': ('kd_spread', False),
+        'fewest_deaths': ('deaths', True),
+    }
+    bests = {p: {k: {'val': None, 'instances': []} for k in categories} for p in players}
+
+    for g in games:
+        for p in players:
+            ps = g['players'][p]
+            info = {
+                'player': p, 'display': DISPLAY_NAMES.get(p, p),
+                'game_num_season': g['game_num_season'],
+                'halonite_num': g['halonite_num'],
+                'season': g['season'],
+                'map': g['map'],
+                'matchup': g['matchup'],
+            }
+            for cat, (field, minimize) in categories.items():
+                val = ps.get(field)
+                if val is None: continue
+                best = bests[p][cat]
+                if best['val'] is None:
+                    best['val'] = val
+                    best['instances'] = [{**info, 'value': val}]
+                elif (val < best['val']) if minimize else (val > best['val']):
+                    best['val'] = val
+                    best['instances'] = [{**info, 'value': val}]
+                elif val == best['val']:
+                    best['instances'].append({**info, 'value': val})
+
+    return bests
+
+
+# ── main ───────────────────────────────────────────────────────────────────
+def build_season_data(games, players, medal_suffixes, season_num):
+    return {
+        'season_num':  season_num,
+        'combine_suicides': season_num != 6,
+        'summary':     build_summary(games, players, season_num),
+        'games':       games,
+        'aggregates':  build_aggregates(games, players, medal_suffixes, season_num),
+        'teams':       build_teams(games, players, season_num),
+        'matchups':    build_matchups(games),
+        'maps':        build_maps(games, players),
+        'halo_nites':  build_halo_nites(games, players, season_num),
+        'records':     build_records(games, players, season_num),
+        'personal_bests': build_personal_bests(games, players),
+    }
 
 
 def main():
+    import openpyxl
+    wb = openpyxl.load_workbook(EXCEL_PATH, data_only=True)
     df = pd.read_excel(EXCEL_PATH, engine='openpyxl')
-    df = df[df['Game_Num_Season'].notna()]
+    df = df[df['Game_Num_Season'].notna()].reset_index(drop=True)
 
-    players = get_players(df)
-    print(f'Players detected: {players}')
-    print(f'Games loaded:     {len(df)}')
+    # Patch Set_Decider/Set_Winner from data_only wb (reads formula results)
+    ws = wb.active
+    headers = [c.value for c in ws[1]]
+    sd_idx = headers.index('Set_Decider')
+    sw_idx = headers.index('Set_Winner')
+    game_rows = [r for r in ws.iter_rows(min_row=2, values_only=True)
+                 if r[headers.index('Game_Num_Season')] is not None]
+    for i, gr in enumerate(game_rows):
+        if i < len(df):
+            df.at[i, 'Set_Decider'] = gr[sd_idx]
+            df.at[i, 'Set_Winner']  = gr[sw_idx]
 
-    games = build_games(df, players)
+    players        = get_players(df)
+    medal_suffixes = get_medal_suffixes(df, players)
+
+    print(f'Players:  {players}')
+    print(f'Games:    {len(df)}')
+    print(f'Medals:   {len(medal_suffixes)} columns per player')
+
+    all_games = build_games(df, players, medal_suffixes, season_num=None)
+
+    # Per season
+    seasons = sorted(df['Season'].dropna().unique())
+    season_data = {}
+    for s in seasons:
+        sn = int(s)
+        s_df = df[df['Season'] == s].reset_index(drop=True)
+        s_games = build_games(s_df, players, medal_suffixes, season_num=sn)
+        season_data[f'S{sn}'] = build_season_data(s_games, players, medal_suffixes, sn)
+        print(f'  S{sn}: {len(s_games)} games')
+
+    # Lifetime (all seasons combined; combine_suicides=True)
+    season_data['Lifetime'] = build_season_data(all_games, players, medal_suffixes, season_num='Lifetime')
+
+    season_keys = ['Lifetime'] + [f'S{int(s)}' for s in seasons]
+
     out = {
-        'season': 6,
-        'players': players,
+        'seasons':       season_keys,
+        'players':       players,
         'display_names': DISPLAY_NAMES,
-        'team_colors': TEAM_COLORS,
-        'games': games,
-        'aggregates': build_aggregates(games, players),
-        'teams': build_teams(games, players),
-        'matchups': build_matchups(games),
-        'maps': build_maps(games, players),
-        'records': build_records(games, players),
+        'player_colors': PLAYER_COLORS,
+        'team_colors':   TEAM_COLORS,
+        'medal_columns': medal_suffixes,
+        'data':          season_data,
     }
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_PATH, 'w') as f:
-        json.dump(out, f, indent=2, default=str)
-    print(f'Output:           {OUTPUT_PATH}')
+        json.dump(out, f, separators=(',', ':'), default=str)
+    size = OUTPUT_PATH.stat().st_size / 1024
+    print(f'Output:   {OUTPUT_PATH}  ({size:.0f} KB)')
 
 
 if __name__ == '__main__':

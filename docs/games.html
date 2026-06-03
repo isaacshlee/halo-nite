@@ -1,123 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halo Nite S6 — Games</title>
-  <link rel="stylesheet" href="css/halo.css">
-  <style>
-    .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
-    .filter-row label { font-size: .68rem; letter-spacing: .18em; color: var(--text-dim); }
-    .filter-row select {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: var(--font-mono);
-      font-size: .78rem;
-      padding: 6px 10px;
-      outline: none;
-    }
-    .filter-row select:focus { border-color: var(--teal-dim); }
-    .game-count { font-size: .68rem; letter-spacing: .18em; color: var(--text-dim); margin-left: auto; }
-
-    /* Expandable row */
-    .expand-row { display: none; }
-    .expand-row td {
-      background: var(--surface2);
-      border-bottom: 2px solid var(--teal-dim);
-      padding: 14px 16px;
-    }
-    .expand-row.open { display: table-row; }
-    .expand-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-    .expand-player {
-      border: 1px solid var(--border);
-      padding: 10px 12px;
-    }
-    .expand-player .ep-name { font-family: var(--font-ui); font-weight: 700; font-size: .88rem; margin-bottom: 6px; }
-    .expand-player .ep-stat { font-size: .72rem; letter-spacing: .08em; color: var(--text-dim); margin-top: 2px; }
-    .expand-player .ep-stat span { color: var(--text); }
-    tbody tr.data-row { cursor: pointer; }
-    .expand-icon { font-size: .7rem; color: var(--text-dim); }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halo Nite — Games</title>
+<link rel="stylesheet" href="css/halo.css">
+<style>
+.game-count { font-size:.72rem;letter-spacing:.18em;color:var(--text-dim);margin-left:auto;font-family:var(--font-head);font-weight:600; }
+tbody tr.data-row { cursor:pointer; }
+.exp-icon { color:var(--text-dim);font-size:.72rem;width:20px;text-align:center; }
+/* Expand table – mirrors the screenshot format */
+.gx-wrap { padding:0; }
+.gx-tbl { width:100%;border-collapse:collapse;font-size:.8rem; }
+.gx-tbl th { font-family:var(--font-head);font-size:.66rem;font-weight:600;letter-spacing:.12em;color:var(--teal);
+              background:var(--surface2);padding:5px 7px;border:1px solid var(--border);white-space:nowrap; }
+.gx-tbl td { padding:5px 7px;border:1px solid var(--border2);white-space:nowrap;vertical-align:middle; }
+.gx-tbl .team-span { background:rgba(0,0,0,.25);font-family:var(--font-head);font-weight:700;font-size:.86rem; }
+.won-r td { background:rgba(74,222,128,.05); }
+.lost-r td { background:rgba(248,113,113,.04); }
+.win-arrow { font-size:.85rem; }
+</style>
 </head>
 <body>
 <div id="nav"></div>
 <main>
-  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
-  <div id="content" style="display:none">
-    <h1 class="page-title">Game Log</h1>
-    <p class="page-subtitle">ALL MATCHES — SEASON 6</p>
-
-    <div class="filter-row">
-      <label>MAP</label>
-      <select id="filter-map" onchange="applyFilters()"><option value="">ALL MAPS</option></select>
-      <label>MATCHUP</label>
-      <select id="filter-matchup" onchange="applyFilters()"><option value="">ALL MATCHUPS</option></select>
-      <label>WINNER</label>
-      <select id="filter-winner" onchange="applyFilters()"><option value="">ANY TEAM</option></select>
-      <span class="game-count" id="game-count"></span>
-    </div>
-
-    <div class="box tbl-wrap" style="padding:0">
-      <table id="games-tbl">
-        <thead><tr>
-          <th class="c">GAME</th>
-          <th class="c">NIGHT</th>
-          <th>MAP</th>
-          <th>MATCHUP</th>
-          <th>WINNER</th>
-          <th id="p0h"></th>
-          <th id="p1h"></th>
-          <th id="p2h"></th>
-          <th id="p3h"></th>
-          <th class="c" style="width:20px"></th>
-        </tr></thead>
-        <tbody id="games-body"></tbody>
-      </table>
-    </div>
+<div id="loading"><span>LOADING MISSION DATA...</span></div>
+<div id="content" style="display:none">
+  <h1 class="page-title">Game Log</h1>
+  <p class="page-subtitle" id="page-sub"></p>
+  <div class="filter-row">
+    <label>MAP</label><select id="f-map" onchange="applyFilters()"><option value="">ALL MAPS</option></select>
+    <label>MATCHUP</label><select id="f-mu" onchange="applyFilters()"><option value="">ALL</option></select>
+    <label>WINNER</label><select id="f-win" onchange="applyFilters()"><option value="">ANY</option></select>
+    <label>NITE</label><select id="f-nite" onchange="applyFilters()"><option value="">ALL NITES</option></select>
+    <span class="game-count" id="gcnt"></span>
   </div>
+  <div class="box tbl-wrap" style="padding:0">
+    <table id="games-tbl">
+      <thead><tr>
+        <th class="c">GAME</th><th class="c">NITE</th><th>MAP</th><th>MATCHUP</th><th>WINNER</th>
+        <th style="width:18px"></th>
+      </tr></thead>
+      <tbody id="games-body"></tbody>
+    </table>
+  </div>
+</div>
 </main>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/common.js"></script>
 <script>
-renderNav('games.html');
-
-let globalData = null;
-let filteredGames = [];
+renderNav('games.html', null);
+let globalData = null, filtered = [];
 
 loadStats().then(data => {
   globalData = data;
+  renderNav('games.html', data);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
-  const { players, games, maps, matchups, teams } = data;
+  const sd = getSeasonData(data);
+  const { players } = data;
+  const { games, maps, matchups, teams, halo_nites } = sd;
+  const isLifetime = getCurrentSeason() === 'Lifetime';
 
-  players.forEach((p, i) => {
-    const el = document.getElementById(`p${i}h`);
-    if (el) el.textContent = dn(p, data).toUpperCase();
+  document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ALL MATCHES`;
+  // Filters
+  [...new Set(games.map(g=>g.map))].sort().forEach(m => {
+    const o = document.createElement('option'); o.value=o.textContent=m;
+    document.getElementById('f-map').appendChild(o);
   });
-
-  // Populate filters
-  const mapSel = document.getElementById('filter-map');
-  Object.keys(maps).forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m; opt.textContent = m;
-    mapSel.appendChild(opt);
-  });
-
-  const muSel = document.getElementById('filter-matchup');
   Object.keys(matchups).forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m; opt.textContent = m;
-    muSel.appendChild(opt);
+    const o = document.createElement('option'); o.value=o.textContent=m;
+    document.getElementById('f-mu').appendChild(o);
   });
-
-  const winSel = document.getElementById('filter-winner');
   Object.keys(teams).forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t; opt.textContent = t;
-    winSel.appendChild(opt);
+    const o = document.createElement('option'); o.value=o.textContent=t;
+    document.getElementById('f-win').appendChild(o);
+  });
+  halo_nites.forEach(n => {
+    const o = document.createElement('option'); o.value=n.nite_num;
+    o.textContent=`Nite ${n.nite_num}`; document.getElementById('f-nite').appendChild(o);
   });
 
   applyFilters();
@@ -125,76 +86,154 @@ loadStats().then(data => {
 
 function applyFilters() {
   if (!globalData) return;
-  const mapF = document.getElementById('filter-map').value;
-  const muF  = document.getElementById('filter-matchup').value;
-  const winF = document.getElementById('filter-winner').value;
-
-  filteredGames = [...globalData.games].reverse().filter(g =>
-    (!mapF || g.map === mapF) &&
-    (!muF  || g.matchup === muF) &&
-    (!winF || g.winning_team === winF)
+  const sd = getSeasonData(globalData);
+  const mapF  = document.getElementById('f-map').value;
+  const muF   = document.getElementById('f-mu').value;
+  const winF  = document.getElementById('f-win').value;
+  const niteF = document.getElementById('f-nite').value;
+  filtered = [...sd.games].reverse().filter(g =>
+    (!mapF  || g.map === mapF) &&
+    (!muF   || g.matchup === muF) &&
+    (!winF  || g.winning_team === winF) &&
+    (!niteF || g.halonite_num == niteF)
   );
-
-  document.getElementById('game-count').textContent = `${filteredGames.length} GAMES`;
+  document.getElementById('gcnt').textContent = `${filtered.length} GAMES`;
   renderGames();
 }
 
 function renderGames() {
   const data = globalData;
   const { players } = data;
+  const isLifetime = getCurrentSeason() === 'Lifetime';
   const tbody = document.getElementById('games-body');
 
-  tbody.innerHTML = filteredGames.map((g, idx) => {
+  tbody.innerHTML = filtered.map((g, idx) => {
     const wc = teamColor(g.winning_team, data);
-    const dataRow = `<tr class="data-row" onclick="toggleExpand(${idx})">
-      <td class="c dim">G${g.game_num_season}</td>
-      <td class="c dim">${g.halonite_num_season}</td>
+    const gameLabel = isLifetime ? (g.game_num_lifetime||g.game_num_season) : g.game_num_season;
+    return `
+    <tr class="data-row" onclick="toggleExpand(${idx})">
+      <td class="c dim">${gameLabel}</td>
+      <td class="c dim">${g.halonite_num}</td>
       <td>${g.map}</td>
       <td class="dim">${g.matchup}</td>
       <td>${teamBadge(g.winning_team, wc)}</td>
-      ${players.map(p => {
-        const ps = g.players[p];
-        const won = ps.team === g.winning_team;
-        return `<td><span class="kd">
-          <span class="${won ? 'kills' : ''}" style="${won ? '' : 'color:var(--text)'}">${ps.kills}</span>
-          <span class="slash">/</span>
-          <span class="deaths">${ps.deaths}</span>
-        </span></td>`;
-      }).join('')}
-      <td class="c expand-icon" id="icon-${idx}">▶</td>
-    </tr>`;
-
-    const expandRow = `<tr class="expand-row" id="expand-${idx}">
-      <td colspan="${4 + players.length + 2}">
-        <div class="expand-inner">
-          ${players.map(p => {
-            const ps = g.players[p];
-            const pc = PLAYER_COLORS[p] || '#aaa';
-            const tc = teamColor(ps.team, data);
-            const won = ps.team === g.winning_team;
-            const topMedals = Object.entries(ps.medals).sort((a,b) => b[1]-a[1]).slice(0,3);
-            return `<div class="expand-player" style="border-top:2px solid ${pc}44">
-              <div class="ep-name" style="color:${pc}">${playerDot(p)}${dn(p, data)}
-                <span style="font-size:.65rem;margin-left:6px">${teamBadge(ps.team, tc)}</span>
-                ${won ? '<span style="color:#4ade80;font-size:.6rem;margin-left:4px">WIN</span>' : ''}
-              </div>
-              <div class="ep-stat">K/D/A: <span>${ps.kills}/${ps.deaths}/${ps.assists}</span></div>
-              <div class="ep-stat">KDR: <span>${fmtKdr(ps.kdr)}</span></div>
-              <div class="ep-stat">Best streak: <span>${ps.most_kills_in_row}</span></div>
-              <div class="ep-stat">Medals: <span>${ps.total_medals}</span></div>
-              ${topMedals.length ? `<div class="ep-stat">Top: <span>${topMedals.map(([m,c])=>`${m} ×${c}`).join(', ')}</span></div>` : ''}
-            </div>`;
-          }).join('')}
-        </div>
+      <td class="c exp-icon" id="icon-${idx}">▶</td>
+    </tr>
+    <tr class="expand-row" id="exp-${idx}">
+      <td colspan="${5+players.length+1}" style="padding:0;background:var(--surface2);border-bottom:2px solid var(--teal-dim)">
+        ${buildExpandTable(g, data, isLifetime)}
       </td>
     </tr>`;
-
-    return dataRow + expandRow;
   }).join('');
 }
 
+function buildExpandTable(g, data, isLifetime) {
+  const { players } = data;
+  const combineSui = getSeasonData(data).combine_suicides;
+  // Group players by team
+  const teamGroups = {};
+  players.forEach(p => {
+    const t = g.players[p].team;
+    if (!teamGroups[t]) teamGroups[t] = [];
+    teamGroups[t].push(p);
+  });
+
+  const teams = Object.keys(teamGroups);
+  const wt = g.winning_team;
+  const gameNum = isLifetime ? (g.game_num_lifetime||g.game_num_season) : g.game_num_season;
+  const mins = Math.floor(g.seconds_played/60), secs = g.seconds_played%60;
+  const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
+
+  const rows = [];
+  const rowCount = players.length; // total player rows
+
+  teams.forEach((tname, ti) => {
+    const tplayers = teamGroups[tname];
+    const tc = teamColor(tname, data);
+    const tScore = tplayers.reduce((s,p)=>s+(g.players[p].score||0),0);
+    const tQike  = tplayers.reduce((s,p)=>s+(g.players[p].qike||0),0);
+    const won = tname === wt;
+
+    tplayers.forEach((p, pi) => {
+      const ps = g.players[p];
+      const pcolor = pc(p, data);
+      const rowClass = won ? 'won-r' : 'lost-r';
+      let row = `<tr class="${rowClass}">`;
+
+      // Map (rowspan=all rows)
+      if (ti === 0 && pi === 0) {
+        row += `<td rowspan="${rowCount}" style="font-family:var(--font-head);font-weight:700;font-size:.9rem;border-right:2px solid var(--border)">${g.map}</td>`;
+        row += `<td rowspan="${rowCount}" style="text-align:center;border-right:2px solid var(--border)">${teamBadge(wt, teamColor(wt,data))}</td>`;
+      }
+
+      // Team (rowspan=2 per team)
+      if (pi === 0) {
+        row += `<td rowspan="${tplayers.length}" class="team-span" style="color:${tc};border-right:1px solid var(--border);text-align:center">${tname}</td>`;
+        row += `<td rowspan="${tplayers.length}" style="text-align:center;font-family:var(--font-head);font-weight:700;font-size:1rem;color:${tc};border-right:1px solid var(--border)">${tScore}</td>`;
+      }
+
+      row += `<td><span style="color:${pcolor};font-family:var(--font-head);font-weight:700">${dn(p,data)}</span></td>`;
+      row += `<td class="r">${ps.score}</td>`;
+      row += `<td class="r">${ps.kills}</td>`;
+      row += `<td class="r">${ps.assists}</td>`;
+      row += `<td class="r">${ps.deaths}</td>`;
+      row += `<td class="r">${ps.kc.toFixed(1)}</td>`;
+      row += `<td class="r" style="color:var(--teal)">${ps.qike.toFixed(3)}</td>`;
+
+      // Team QIKE (rowspan=2)
+      if (pi === 0) {
+        row += `<td rowspan="${tplayers.length}" style="text-align:center;font-family:var(--font-head);font-weight:700;color:var(--teal)">${tQike.toFixed(3)}</td>`;
+      }
+
+      row += `<td class="r">${ps.weapon_kills}</td>`;
+      row += `<td class="r">${ps.grenade_kills}</td>`;
+      row += `<td class="r">${ps.melee_kills}</td>`;
+      row += `<td class="r">${ps.other_kills}</td>`;
+      row += `<td class="r">${ps.avg_life.toFixed(0)}</td>`;
+      row += `<td class="r">${ps.most_kills_in_row}</td>`;
+      row += `<td class="r">${ps.total_medals}</td>`;
+      row += `<td class="r" style="color:${ps.kd_spread>=0?'#4ade80':'#f87171'}">${ps.kd_spread>0?'+':''}${ps.kd_spread}</td>`;
+      row += `<td class="r" style="color:${ps.kcd_spread>=0?'#4ade80':'#f87171'}">${ps.kcd_spread>0?'+':''}${ps.kcd_spread.toFixed(1)}</td>`;
+      if (combineSui) {
+        row += `<td class="r">${(ps.betrayals||0)+(ps.suicides||0)}</td>`;
+      } else {
+        row += `<td class="r">${ps.suicides||0}</td>`;
+        row += `<td class="r">${ps.betrayals||0}</td>`;
+      }
+
+      // Total game time (rowspan=all)
+      if (ti === 0 && pi === 0) {
+        row += `<td rowspan="${rowCount}" style="text-align:center;font-family:var(--font-head);font-weight:700;color:var(--text-mid)">${timeStr}</td>`;
+      }
+
+      row += '</tr>';
+      rows.push(row);
+    });
+  });
+
+  const suiHeader = combineSui
+    ? `<th class="r">BTR+SUI</th>`
+    : `<th class="r">SUI</th><th class="r">BTR</th>`;
+
+  return `<table class="gx-tbl">
+    <thead><tr>
+      <th>MAP</th><th>WINNER</th><th>TEAM</th><th class="r">SCORE</th>
+      <th>PLAYER</th><th class="r">PTS</th><th class="r">K</th>
+      <th class="r">A</th><th class="r">D</th>
+      <th class="r">KC</th><th class="r">QIKE</th>
+      <th class="r">TEAM QIKE</th>
+      <th class="r">WPN</th><th class="r">GRN</th><th class="r">MEL</th><th class="r">OTH</th>
+      <th class="r">AVG LIFE</th><th class="r">SPREE</th><th class="r">MEDALS</th>
+      <th class="r">K/D</th><th class="r">KC/D</th>
+      ${suiHeader}
+      <th class="r">TIME</th>
+    </tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table>`;
+}
+
 function toggleExpand(idx) {
-  const row = document.getElementById(`expand-${idx}`);
+  const row  = document.getElementById(`exp-${idx}`);
   const icon = document.getElementById(`icon-${idx}`);
   if (!row) return;
   const open = row.classList.toggle('open');

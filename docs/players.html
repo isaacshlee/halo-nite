@@ -1,231 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halo Nite S6 — Players</title>
-  <link rel="stylesheet" href="css/halo.css">
-  <style>
-    .player-header {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      padding: 20px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-    .player-avatar {
-      width: 56px; height: 56px;
-      clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
-      display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-halo);
-      font-size: 1.4rem;
-      flex-shrink: 0;
-    }
-    .player-header-info h2 {
-      font-family: var(--font-halo);
-      font-size: 1.6rem;
-      letter-spacing: .06em;
-      line-height: 1;
-    }
-    .player-header-info p {
-      font-size: .68rem;
-      letter-spacing: .2em;
-      color: var(--text-dim);
-      margin-top: 4px;
-    }
-    .medal-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .medal-chip {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      padding: 4px 12px;
-      font-size: .72rem;
-      letter-spacing: .1em;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .medal-chip .m-count {
-      font-family: var(--font-halo);
-      font-size: .9rem;
-      color: var(--teal);
-    }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halo Nite — Players</title>
+<link rel="stylesheet" href="css/halo.css">
+<style>
+.four-col { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px; }
+@media(max-width:1280px){ .four-col{grid-template-columns:repeat(2,1fr);} }
+@media(max-width:600px) { .four-col{grid-template-columns:1fr;} }
+.plr-col { display:flex;flex-direction:column;gap:10px;min-width:0; }
+.plr-hdr { padding:10px 14px;border-top:3px solid; }
+.plr-hdr .name { font-family:var(--font-head);font-size:1.3rem;font-weight:700;letter-spacing:.08em;line-height:1; }
+.plr-hdr .tag  { font-size:.66rem;letter-spacing:.15em;color:var(--text-dim);margin-top:2px; }
+.sub-label { font-family:var(--font-head);font-size:.7rem;font-weight:600;letter-spacing:.2em;color:var(--text-dim);margin-bottom:6px; }
+.team-stat-row { display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border2);font-size:.82rem; }
+.team-stat-row:last-child{border-bottom:none;}
+.team-stat-row .ts-team { font-family:var(--font-head);font-size:.82rem;font-weight:600; }
+.team-stat-row .ts-val  { font-family:var(--font-head);font-weight:700;font-size:.95rem; }
+.pie-box { background:var(--surface);border:1px solid var(--border);padding:10px; }
+.pie-box h4 { font-family:var(--font-head);font-size:.7rem;font-weight:600;letter-spacing:.16em;color:var(--text-dim);margin-bottom:6px;text-align:center; }
+.pie-box canvas { max-height:180px; }
+.pie-caption { text-align:center;font-size:.66rem;color:var(--text-dim);margin-top:4px;letter-spacing:.08em; }
+.medal-list { display:flex;flex-wrap:wrap;gap:3px;padding:6px; }
+.medal-chip { background:var(--surface2);border:1px solid var(--border);padding:2px 7px;font-size:.7rem;display:inline-flex;gap:4px;align-items:center; }
+.medal-chip .mc { font-family:var(--font-head);font-weight:700;font-size:.84rem; }
+</style>
 </head>
 <body>
 <div id="nav"></div>
 <main>
-  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
-  <div id="content" style="display:none">
-    <h1 class="page-title">Player Profiles</h1>
-    <p class="page-subtitle">INDIVIDUAL SPARTAN STATISTICS — SEASON 6</p>
-
-    <div class="tab-bar" id="player-tabs"></div>
-    <div id="player-panel"></div>
-  </div>
+<div id="loading"><span>LOADING...</span></div>
+<div id="content" style="display:none">
+  <h1 class="page-title">Player Profiles</h1>
+  <p class="page-subtitle" id="page-sub"></p>
+  <div class="four-col" id="player-cols"></div>
+</div>
 </main>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/common.js"></script>
 <script>
-renderNav('players.html');
-
-let globalData = null;
-let activePlayer = null;
-let killsChart = null;
-let kdrChart = null;
-let medalChart = null;
-
+renderNav('players.html', null);
 loadStats().then(data => {
-  globalData = data;
+  renderNav('players.html', data);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
+  const sd = getSeasonData(data);
   const { players } = data;
-  document.getElementById('player-tabs').innerHTML = players.map(p =>
-    `<button class="tab-btn" onclick="showPlayer('${p}')">${dn(p, data)}</button>`
-  ).join('');
+  const { aggregates, games } = sd;
 
-  showPlayer(players[0]);
-});
+  document.getElementById('page-sub').textContent = `${getCurrentSeason()} — INDIVIDUAL STATISTICS`;
 
-function showPlayer(gamertag) {
-  if (!globalData) return;
-  activePlayer = gamertag;
-  const data = globalData;
-  const { players, aggregates, games } = data;
-  const a = aggregates[gamertag];
-  const color = PLAYER_COLORS[gamertag] || '#00e5ff';
-  const displayName = dn(gamertag, data);
-
-  // Update tabs
-  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    btn.classList.toggle('active', players[i] === gamertag);
-  });
-
-  const panel = document.getElementById('player-panel');
-
-  // Build per-game data for this player
-  const playerGames = games.map(g => ({ ...g.players[gamertag], game_num: g.game_num_season, map: g.map, winning_team: g.winning_team }));
-
-  // Top medals
-  const medalHtml = a.top_medals.length ? a.top_medals.map(([medal, count]) =>
-    `<div class="medal-chip"><span class="m-count">${count}</span>${medal}</div>`
-  ).join('') : '<span style="color:var(--text-dim);font-size:.8rem">No medal data</span>';
-
-  panel.innerHTML = `
-    <div class="player-header">
-      <div class="player-avatar" style="background:${color}22;border:2px solid ${color}44;color:${color}">
-        ${displayName[0].toUpperCase()}
-      </div>
-      <div class="player-header-info">
-        <h2 style="color:${color};text-shadow:0 0 14px ${color}44">${displayName}</h2>
-        <p>${gamertag} &nbsp;·&nbsp; ${a.games} GAMES &nbsp;·&nbsp; ${a.wins}W / ${a.losses}L</p>
-      </div>
-    </div>
-
-    <div class="cards-grid" style="margin-bottom:20px">
-      ${[
-        { num: fmtKdr(a.kdr),       lbl: 'CAREER KDR'     },
-        { num: a.total_kills,        lbl: 'TOTAL KILLS'    },
-        { num: a.win_pct + '%',      lbl: 'WIN RATE'       },
-        { num: a.avg_kills,          lbl: 'AVG KILLS/GAME' },
-        { num: a.avg_deaths,         lbl: 'AVG DEATHS/GAME'},
-        { num: a.best_kills,         lbl: 'MOST KILLS/GAME'},
-        { num: fmtKdr(a.best_kdr),   lbl: 'BEST KDR/GAME'  },
-        { num: a.total_medals,       lbl: 'TOTAL MEDALS'   },
-      ].map(s => `<div class="stat-card"><div class="num" style="color:${color};text-shadow:0 0 12px ${color}44">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join('')}
-    </div>
-
-    ${sectionHdr('MEDALS EARNED')}
-    <div class="box" style="margin-bottom:20px">
-      <div class="medal-row">${medalHtml}</div>
-    </div>
-
-    ${sectionHdr('PERFORMANCE OVER TIME')}
-    <div class="chart-grid">
-      <div class="chart-box"><h3>KILLS PER GAME</h3><canvas id="kills-chart"></canvas></div>
-      <div class="chart-box"><h3>KDR PER GAME</h3><canvas id="kdr-chart"></canvas></div>
-    </div>
-
-    ${sectionHdr('VS OTHER PLAYERS')}
-    <div class="box tbl-wrap">
-      <table>
-        <thead><tr>
-          <th>OPPONENT</th>
-          <th class="r">MY AVG KILLS</th>
-          <th class="r">THEIR AVG KILLS</th>
-          <th class="r">GAMES TOGETHER</th>
-        </tr></thead>
-        <tbody id="h2h-body"></tbody>
-      </table>
-    </div>
-  `;
-
-  // Charts
-  const labels = playerGames.map(g => `G${g.game_num}`);
-
-  if (killsChart) killsChart.destroy();
-  if (kdrChart) kdrChart.destroy();
-
-  killsChart = makeChart('kills-chart', 'line', labels, [{
-    label: 'Kills',
-    data: playerGames.map(g => g.kills),
-    borderColor: color,
-    backgroundColor: color + '18',
-    fill: true,
-    tension: 0.3,
-    pointRadius: 2,
-    pointHoverRadius: 5,
-  }]);
-
-  kdrChart = makeChart('kdr-chart', 'line', labels, [{
-    label: 'KDR',
-    data: playerGames.map(g => g.kdr),
-    borderColor: color,
-    backgroundColor: color + '18',
-    fill: true,
-    tension: 0.3,
-    pointRadius: 2,
-    pointHoverRadius: 5,
-  }], {
-    plugins: {
-      legend: { display: false },
-      annotation: {},
-    },
-  });
-
-  // H2H
-  const others = players.filter(p => p !== gamertag);
-  const h2hBody = document.getElementById('h2h-body');
-  h2hBody.innerHTML = others.map(opp => {
-    let myKills = 0, theirKills = 0, sharedGames = 0;
+  // Compute per-player per-team avg score and KC from games
+  function teamAvgs(p) {
+    const acc = {};
     games.forEach(g => {
-      const me = g.players[gamertag];
-      const them = g.players[opp];
-      if (me && them) {
-        myKills += me.kills;
-        theirKills += them.kills;
-        sharedGames++;
-      }
+      const ps = g.players[p];
+      const t = ps.team;
+      if (!acc[t]) acc[t] = { score:0, kc:0, games:0 };
+      acc[t].score += ps.score;
+      acc[t].kc    += ps.kc;
+      acc[t].games += 1;
     });
-    const g = sharedGames || 1;
-    const myAvg = (myKills / g).toFixed(1);
-    const theirAvg = (theirKills / g).toFixed(1);
-    const oppColor = PLAYER_COLORS[opp] || '#aaa';
-    return `<tr>
-      <td><span class="player-tag">${playerDot(opp)}${dn(opp, data)}</span></td>
-      <td class="r ${parseFloat(myAvg) >= parseFloat(theirAvg) ? 'good' : 'bad'}">${myAvg}</td>
-      <td class="r">${theirAvg}</td>
-      <td class="r dim">${sharedGames}</td>
-    </tr>`;
+    return Object.entries(acc).map(([t,v])=>({
+      team: t,
+      avg_score: (v.score/v.games).toFixed(1),
+      avg_kc:    (v.kc/v.games).toFixed(1),
+      games: v.games,
+    })).sort((a,b)=>b.games - a.games);
+  }
+
+  document.getElementById('player-cols').innerHTML = players.map(p => {
+    const c = pc(p, data);
+    const a = aggregates[p];
+    const allMedals = Object.entries(a.medals||{}).sort((x,y)=>y[1]-x[1]);
+    const ka = a.kills_against || {};
+    const opponents = players.filter(q=>q!==p);
+    const totalKills = a.total_kills || 1;
+
+    return `<div class="plr-col">
+      <!-- Header -->
+      <div class="plr-hdr" style="background:var(--surface);border:1px solid var(--border);border-top-color:${c}">
+        <div class="name" style="color:${c}">${dn(p,data)}</div>
+        <div class="tag">${p}</div>
+      </div>
+
+      <!-- Avg pts/KC by team -->
+      <div class="box" style="padding:10px 12px">
+        <div class="sub-label">AVG STATS BY TEAM</div>
+        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:0;font-size:.78rem">
+          <div style="color:var(--text-dim);font-size:.68rem;letter-spacing:.12em;padding:3px 6px 3px 0">TEAM</div>
+          <div style="color:var(--text-dim);font-size:.68rem;letter-spacing:.12em;padding:3px 4px;text-align:right">AVG PTS</div>
+          <div style="color:var(--text-dim);font-size:.68rem;letter-spacing:.12em;padding:3px 0 3px 4px;text-align:right">AVG KC</div>
+          ${teamAvgs(p).map(({team,avg_score,avg_kc,games:gn})=>{
+            const tc = teamColor(team,data);
+            return `<div style="padding:3px 6px 3px 0">${teamBadge(team,tc)}</div>
+              <div style="text-align:right;font-family:var(--font-head);font-weight:700;padding:3px 4px;color:${c}">${avg_score}</div>
+              <div style="text-align:right;font-family:var(--font-head);font-weight:700;padding:3px 0 3px 4px;color:${c}">${avg_kc}</div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Kills against opponents -->
+      <div class="pie-box">
+        <h4>KILLS AGAINST OPPONENTS</h4>
+        <canvas id="ka-${p}" style="max-height:160px"></canvas>
+        <div class="pie-caption">Total: ${a.total_kills} kills</div>
+      </div>
+
+      <!-- Kill style breakdown -->
+      <div class="pie-box">
+        <h4>KILL STYLES</h4>
+        <canvas id="ks-${p}" style="max-height:160px"></canvas>
+        <div class="pie-caption">Total: ${a.total_kills} kills</div>
+      </div>
+
+      <!-- Medals -->
+      <div class="box" style="padding:0">
+        <div style="padding:8px 10px 4px;font-family:var(--font-head);font-size:.6rem;font-weight:600;letter-spacing:.18em;color:var(--text-dim)">MEDALS EARNED</div>
+        <div class="medal-list">
+          ${allMedals.length
+            ? allMedals.map(([m,cnt])=>`<div class="medal-chip"><span class="mc" style="color:${c}">${cnt}</span>${m}</div>`).join('')
+            : `<span style="color:var(--text-dim);font-size:.82rem;padding:6px">No data</span>`}
+        </div>
+      </div>
+    </div>`;
   }).join('');
-}
+
+  // Render all charts
+  players.forEach(p => {
+    const c = pc(p, data);
+    const a = aggregates[p];
+    const opponents = players.filter(q=>q!==p);
+    const ka = a.kills_against || {};
+
+    // Kills against opponents pie
+    const kaVals  = opponents.map(o => ka[o]||0);
+    const kaTotal = kaVals.reduce((s,v)=>s+v,0)||1;
+    makePie(`ka-${p}`,
+      opponents.map((o,i)=>{
+        const v = kaVals[i];
+        return `${dn(o,data)}: ${v} (${(v/kaTotal*100).toFixed(1)}%)`;
+      }),
+      kaVals,
+      opponents.map(o=>pc(o,data))
+    );
+
+    // Kill style pie
+    const ksVals = [a.total_weapon_kills,a.total_grenade_kills,a.total_melee_kills,a.total_other_kills];
+    const ksTotal = ksVals.reduce((s,v)=>s+v,0)||1;
+    makePie(`ks-${p}`,
+      ['Weapon','Grenade','Melee','Other'].map((l,i)=>`${l}: ${ksVals[i]} (${(ksVals[i]/ksTotal*100).toFixed(1)}%)`),
+      ksVals,
+      ['#4488ff','#ff6a00','#44dd88','#c088ff']
+    );
+  });
+});
 </script>
 </body>
 </html>

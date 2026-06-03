@@ -1,159 +1,313 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halo Nite S6 — Overview</title>
-  <link rel="stylesheet" href="css/halo.css">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halo Nite — Overview</title>
+<link rel="stylesheet" href="css/halo.css">
+<style>
+.sum-row { display:grid; gap:8px; margin-bottom:8px; }
+.sum-row-1 { grid-template-columns:repeat(4,1fr); }
+.sum-row-mu{ grid-template-columns:repeat(3,1fr); }
+.sum-row-3 { grid-template-columns:repeat(4,1fr); }
+.sum-row-4 { grid-template-columns:repeat(7,1fr); }
+@media(max-width:900px){ .sum-row-1,.sum-row-3,.sum-row-4{grid-template-columns:repeat(2,1fr);} .sum-row-mu{grid-template-columns:1fr;} }
+.sum-card { background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--teal-dim);padding:10px 14px; }
+.sum-card .s-val { font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--teal);line-height:1;text-shadow:0 0 10px var(--teal-glow); }
+.sum-card .s-lbl { font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);margin-top:3px; }
+.mu-card { background:var(--surface);border:1px solid var(--border);padding:12px 16px; }
+.mu-card .mu-name { font-family:var(--font-head);font-size:.9rem;font-weight:700;letter-spacing:.12em;color:var(--text-mid);margin-bottom:6px; }
+
+/* Player leaderboard — full-width tables, chart rows */
+.plr-tbl-wrap { margin-bottom:10px; }
+.charts-2 { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px; }
+.charts-5 { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px; }
+@media(max-width:700px)  { .charts-2,.charts-5{grid-template-columns:1fr 1fr;} }
+.chart-box-plr { background:var(--surface);border:1px solid var(--border);padding:10px; }
+.chart-box-plr h4 { font-family:var(--font-head);font-size:.78rem;font-weight:600;letter-spacing:.18em;color:var(--text-dim);margin-bottom:6px; }
+.chart-box-plr canvas { max-height:220px; }
+
+/* Team leaderboard */
+.team-lb-layout { display:grid;grid-template-columns:520px 1fr;gap:16px;align-items:start; }
+@media(max-width:1100px){ .team-lb-layout{grid-template-columns:1fr;} }
+.team-charts-col { display:flex;flex-direction:column;gap:10px; }
+.chart-box-team { background:var(--surface);border:1px solid var(--border);padding:10px 12px; }
+.chart-box-team h4 { font-family:var(--font-head);font-size:.78rem;font-weight:600;letter-spacing:.18em;color:var(--text-dim);margin-bottom:8px; }
+.chart-box-team canvas { max-height:200px; }
+
+/* Compact table */
+.ctbl { width:100%;border-collapse:collapse;font-size:.93rem; }
+.ctbl th { font-family:var(--font-head);font-size:.78rem;font-weight:600;letter-spacing:.13em;color:var(--teal);padding:6px 9px;background:var(--surface);border-bottom:1px solid var(--teal-dim);white-space:nowrap;text-align:right; }
+.ctbl th:first-child { text-align:left; }
+.ctbl td { padding:6px 9px;border-bottom:1px solid var(--border2);white-space:nowrap;text-align:right; }
+.ctbl td:first-child { text-align:left; }
+.ctbl tr:hover td { background:var(--teal-glow2); }
+</style>
 </head>
 <body>
 <div id="nav"></div>
 <main>
-  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
-  <div id="content" style="display:none">
-    <h1 class="page-title">Season Overview</h1>
-    <p class="page-subtitle">SEASON 6 — SPARTAN OPERATIONS</p>
+<div id="loading"><span>LOADING...</span></div>
+<div id="content" style="display:none">
+  <h1 class="page-title">Season Overview</h1>
+  <p class="page-subtitle" id="page-sub"></p>
 
-    <div id="season-stats" class="cards-grid"></div>
+  <!-- SEASON SUMMARY -->
+  <div id="sh-sum"></div>
+  <div class="sum-row sum-row-1" id="sum-r1"></div>
+  <div class="sum-row sum-row-mu" id="sum-r2"></div>
+  <div class="sum-row sum-row-3" id="sum-r3"></div>
+  <div class="sum-row sum-row-4" id="sum-r4"></div>
 
-    <div id="sh-standings"></div>
-    <div class="box tbl-wrap">
-      <table id="standings-tbl">
-        <thead><tr>
-          <th class="c">#</th>
-          <th>PLAYER</th>
-          <th class="r">W</th>
-          <th class="r">L</th>
-          <th class="r">WIN%</th>
-          <th class="r">KDR</th>
-          <th class="r">KILLS</th>
-          <th class="r">DEATHS</th>
-          <th class="r">AVG K</th>
-          <th class="r">MEDALS</th>
-        </tr></thead>
-        <tbody id="standings-body"></tbody>
-      </table>
-    </div>
+  <!-- PLAYER LEADERBOARD -->
+  <div id="sh-plr"></div>
 
-    <div id="sh-charts"></div>
-    <div class="chart-grid">
-      <div class="chart-box"><h3>TOTAL KILLS</h3><canvas id="kills-chart"></canvas></div>
-      <div class="chart-box"><h3>KDR TREND — ALL GAMES</h3><canvas id="kdr-chart"></canvas></div>
-    </div>
+  <!-- Table 1 full width -->
+  <div class="box tbl-wrap plr-tbl-wrap" style="padding:0"><table class="ctbl" id="plr-tbl1">
+    <thead><tr><th>PLAYER</th><th>W</th><th>L</th><th>W/L</th><th>WIN%</th><th>SW</th><th>SL</th><th>SW/L</th><th>SWIN%</th></tr></thead>
+    <tbody id="plr-t1-body"></tbody>
+  </table></div>
+  <!-- 2 charts -->
+  <div class="charts-2" id="plr-charts-1"></div>
 
-    <div id="sh-recent"></div>
-    <div class="box tbl-wrap">
-      <table id="recent-tbl">
-        <thead><tr>
-          <th>GAME</th>
-          <th>MAP</th>
-          <th>MATCHUP</th>
-          <th>WINNER</th>
-          <th id="p0h"></th>
-          <th id="p1h"></th>
-          <th id="p2h"></th>
-          <th id="p3h"></th>
-        </tr></thead>
-        <tbody id="recent-body"></tbody>
-      </table>
-    </div>
+  <!-- Table 2 full width -->
+  <div class="box tbl-wrap plr-tbl-wrap" style="padding:0"><table class="ctbl" id="plr-tbl2">
+    <thead><tr><th>PLAYER</th><th>PTS</th><th>K</th><th>A</th><th>D</th><th>KC</th><th>K/D</th><th>KC/D</th><th>KDR</th></tr></thead>
+    <tbody id="plr-t2-body"></tbody>
+  </table></div>
+  <!-- 5 charts -->
+  <div class="charts-5" id="plr-charts-2"></div>
+
+  <!-- Table 3 full width -->
+  <div class="box tbl-wrap plr-tbl-wrap" style="padding:0"><table class="ctbl" id="plr-tbl3">
+    <thead><tr id="plr-t3-hdr"></tr></thead>
+    <tbody id="plr-t3-body"></tbody>
+  </table></div>
+  <!-- 5 charts -->
+  <div class="charts-5" id="plr-charts-3"></div>
+
+  <!-- TEAM LEADERBOARD -->
+  <div id="sh-team"></div>
+  <div class="team-lb-layout">
+    <div id="team-tables"></div>
+    <div class="team-charts-col" id="team-charts"></div>
   </div>
+</div>
 </main>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/common.js"></script>
 <script>
-renderNav('index.html');
-
+renderNav('index.html', null);
 loadStats().then(data => {
+  renderNav('index.html', data);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
-  const { players, aggregates, games, records } = data;
+  const sd = getSeasonData(data);
+  const { players } = data;
+  const { summary, aggregates, teams, matchups } = sd;
+  const combineSui = sd.combine_suicides;
 
-  // Season stat cards
-  const totalGames = games.length;
-  const totalKills = players.reduce((s, p) => s + aggregates[p].total_kills, 0);
-  const topKDR = players.reduce((best, p) => aggregates[p].kdr > (best.v || 0) ? { p, v: aggregates[p].kdr } : best, {});
-  document.getElementById('season-stats').innerHTML = [
-    { num: totalGames, lbl: 'GAMES PLAYED' },
-    { num: totalKills, lbl: 'TOTAL KILLS' },
-    { num: players.length, lbl: 'SPARTANS' },
-    { num: records.most_kills.value, lbl: 'KILL RECORD' },
-  ].map(s => `<div class="stat-card"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join('');
+  document.getElementById('page-sub').textContent =
+    `${getCurrentSeason()} — ${summary.total_games} GAMES · ${summary.total_sets} SETS · ${summary.total_nites} NITES · ${fmtTime(summary.total_seconds)}`;
 
-  // Section headers
-  document.getElementById('sh-standings').innerHTML = sectionHdr('SEASON STANDINGS');
-  document.getElementById('sh-charts').innerHTML = sectionHdr('PERFORMANCE CHARTS');
-  document.getElementById('sh-recent').innerHTML = sectionHdr('RECENT GAMES');
+  document.getElementById('sh-sum').innerHTML = sectionHdr('SEASON SUMMARY');
 
-  // Standings — sort by KDR desc
-  const ranked = [...players].sort((a, b) => aggregates[b].kdr - aggregates[a].kdr);
-  const rankClass = ['gold', 'silver', 'bronze'];
-  document.getElementById('standings-body').innerHTML = ranked.map((p, i) => {
-    const a = aggregates[p];
-    const c = PLAYER_COLORS[p] || '#aaa';
-    return `<tr>
-      <td class="rank-cell ${rankClass[i] || ''}">${i + 1}</td>
-      <td><span class="player-tag">${playerDot(p)}${dn(p, data)}</span></td>
-      <td class="r">${a.wins}</td>
-      <td class="r">${a.losses}</td>
-      <td class="r ${a.win_pct >= 50 ? 'good' : 'bad'}">${a.win_pct}%</td>
-      <td class="r teal">${fmtKdr(a.kdr)}</td>
-      <td class="r">${a.total_kills}</td>
-      <td class="r dim">${a.total_deaths}</td>
-      <td class="r">${a.avg_kills}</td>
-      <td class="r dim">${a.total_medals}</td>
-    </tr>`;
+  document.getElementById('sum-r1').innerHTML = [
+    { v: summary.total_games, l: 'TOTAL GAMES' },
+    { v: summary.total_sets,  l: 'TOTAL SETS' },
+    { v: summary.total_nites, l: 'HALO NITES' },
+    { v: fmtTime(summary.total_seconds), l: 'TIME PLAYED' },
+  ].map(s=>`<div class="sum-card"><div class="s-val">${s.v}</div><div class="s-lbl">${s.l}</div></div>`).join('');
+
+  document.getElementById('sum-r2').innerHTML = Object.entries(summary.matchup_games).map(([mu,cnt])=>{
+    const [ta,tb]=mu.split(' vs ');
+    const ca=teamColor(ta,data), cb=teamColor(tb,data);
+    const mu_d=matchups[mu]||{};
+    return `<div class="mu-card">
+      <div class="mu-name">${mu}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="color:${ca};font-family:var(--font-head);font-weight:700">${ta}</span>
+        <span style="font-size:.75rem;color:var(--text-dim)">vs</span>
+        <span style="color:${cb};font-family:var(--font-head);font-weight:700">${tb}</span>
+      </div>
+      <div style="font-size:.68rem;color:var(--text-dim)">${cnt} games · ${fmtTime(summary.matchup_seconds[mu]||0)}</div>
+      <div style="font-size:.68rem;color:var(--text-dim);margin-top:2px">${ta} ${mu_d.a_wins||0}W – ${mu_d.b_wins||0}W ${tb}</div>
+    </div>`;
   }).join('');
 
-  // Kills bar chart
-  makeChart('kills-chart', 'bar',
-    ranked.map(p => dn(p, data)),
-    [{
-      data: ranked.map(p => aggregates[p].total_kills),
-      backgroundColor: ranked.map(p => PLAYER_COLORS[p] + '99'),
-      borderColor: ranked.map(p => PLAYER_COLORS[p]),
-      borderWidth: 1,
-    }],
-    { plugins: { legend: { display: false } } }
-  );
+  document.getElementById('sum-r3').innerHTML = [
+    { v: summary.score,   l: 'TOTAL POINTS' },
+    { v: summary.kills,   l: 'TOTAL KILLS' },
+    { v: summary.assists, l: 'TOTAL ASSISTS' },
+    { v: summary.deaths,  l: 'TOTAL DEATHS' },
+  ].map(s=>`<div class="sum-card"><div class="s-val">${s.v}</div><div class="s-lbl">${s.l}</div></div>`).join('');
 
-  // KDR line chart
-  const labels = games.map((_, i) => `G${i + 1}`);
-  makeChart('kdr-chart', 'line', labels,
-    players.map(p => ({
-      label: dn(p, data),
-      data: aggregates[p].kdr_per_game,
-      borderColor: PLAYER_COLORS[p],
-      backgroundColor: 'transparent',
-      pointRadius: 1,
-      pointHoverRadius: 4,
-      tension: 0.3,
-    })),
-    { plugins: { legend: { position: 'top' } } }
-  );
+  const row4 = [
+    {v:summary.weapon_kills, l:'WEAPON KILLS'},{v:summary.grenade_kills,l:'GRENADE KILLS'},
+    {v:summary.melee_kills,  l:'MELEE KILLS'}, {v:summary.other_kills,  l:'OTHER KILLS'},
+    {v:summary.medals,       l:'TOTAL MEDALS'},
+    ...(combineSui
+      ? [{v:summary.betrayals+summary.suicides,l:'BETRAY+SUI'}]
+      : [{v:summary.betrayals,l:'BETRAYALS'},{v:summary.suicides,l:'SUICIDES'}]),
+  ];
+  document.getElementById('sum-r4').innerHTML = row4.map(s=>
+    `<div class="sum-card"><div class="s-val">${s.v}</div><div class="s-lbl">${s.l}</div></div>`
+  ).join('');
 
-  // Recent games (last 8, reversed)
-  const recent = [...games].reverse().slice(0, 8);
-  players.forEach((p, i) => {
-    const el = document.getElementById(`p${i}h`);
-    if (el) el.textContent = dn(p, data).toUpperCase();
+  // ── PLAYER LEADERBOARD ──
+  document.getElementById('sh-plr').innerHTML = sectionHdr('PLAYER LEADERBOARD');
+
+  function g_(v,pos) { return `<span class="${v>=0?(pos?'good':'bad'):(pos?'bad':'good')}">${v>0?'+':''}${v}</span>`; }
+  function pct_(v,t=50) { return `<span class="${v>=t?'good':'bad'}">${v}%</span>`; }
+
+  function plrRow(p, cells) {
+    const c = pc(p, data);
+    return `<tr>
+      <td><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span></td>
+      ${cells.map(x=>`<td>${x}</td>`).join('')}
+    </tr>`;
+  }
+
+  // Table 1
+  document.getElementById('plr-t1-body').innerHTML = players.map(p=>{
+    const a=aggregates[p];
+    return plrRow(p,[
+      `<span class="good">${a.wins}</span>`,`<span class="bad">${a.losses}</span>`,
+      g_(a.wl_spread,true), pct_(a.win_pct),
+      `<span class="good">${a.set_wins}</span>`,`<span class="bad">${a.set_losses}</span>`,
+      g_(a.set_wl_spread,true), pct_(a.set_win_pct),
+    ]);
+  }).join('');
+
+  // Table 2
+  document.getElementById('plr-t2-body').innerHTML = players.map(p=>{
+    const a=aggregates[p];
+    return plrRow(p,[
+      a.total_score,a.total_kills,a.total_assists,a.total_deaths,
+      a.total_kc.toFixed(0), g_(a.kd_spread,true),
+      g_(Math.round(a.kcd_spread),true),
+      `<span class="teal">${fmtKdr(a.kdr)}</span>`,
+    ]);
+  }).join('');
+
+  // Table 3
+  document.getElementById('plr-t3-hdr').innerHTML = `<th>PLAYER</th>
+    <th>WPN</th><th>GRN</th><th>MEL</th><th>OTH</th><th>MEDALS</th>
+    ${combineSui?`<th>B+S</th>`:`<th>BTR</th><th>SUI</th>`}
+    <th>AVG QIKE</th>`;
+  document.getElementById('plr-t3-body').innerHTML = players.map(p=>{
+    const a=aggregates[p];
+    return plrRow(p,[
+      a.total_weapon_kills,a.total_grenade_kills,a.total_melee_kills,a.total_other_kills,a.total_medals,
+      ...(combineSui?[a.total_betrayals+a.total_suicides]:[a.total_betrayals,a.total_suicides]),
+      `<span class="teal">${a.avg_qike.toFixed(4)}</span>`,
+    ]);
+  }).join('');
+
+  // ── Player charts ──
+  const labels = aggregates[players[0]].game_labels;
+  function cumDS(key) {
+    return players.map(p=>({
+      label: dn(p,data),
+      data: aggregates[p].cumulative[key],
+      borderColor: pc(p,data),
+      backgroundColor:'transparent',
+      borderWidth:1.5, pointRadius:0, pointHoverRadius:3, tension:0.3,
+    }));
+  }
+  function lineChart(id, key) {
+    makeChart(id,'line',labels,cumDS(key),{
+      plugins:{legend:{position:'top',labels:{color:'#7aacba',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
+    });
+  }
+
+  // Charts row 1: W/L Spread + Set W/L Spread
+  document.getElementById('plr-charts-1').innerHTML = `
+    <div class="chart-box-plr"><h4>MATCH W/L SPREAD</h4><canvas id="plr-wl"></canvas></div>
+    <div class="chart-box-plr"><h4>SET W/L SPREAD</h4><canvas id="plr-swl"></canvas></div>`;
+
+  // Charts row 2: Pts, Kills, Assists, Deaths, K/D
+  document.getElementById('plr-charts-2').innerHTML = [
+    ['plr-pts','score','CUMULATIVE POINTS'],['plr-k','kills','CUMULATIVE KILLS'],
+    ['plr-a','assists','ASSISTS'],['plr-d','deaths','DEATHS'],['plr-kd','kd_spread','K/D SPREAD'],
+  ].map(([id,,l])=>`<div class="chart-box-plr"><h4>${l}</h4><canvas id="${id}"></canvas></div>`).join('');
+
+  // Charts row 3: Wpn, Gren, Mel, Other, QIKE
+  document.getElementById('plr-charts-3').innerHTML = [
+    ['plr-wk','weapon_kills','WEAPON KILLS'],['plr-gk','grenade_kills','GRENADE KILLS'],
+    ['plr-mk','melee_kills','MELEE KILLS'],['plr-ok','other_kills','OTHER KILLS'],['plr-qi','qike','QIKE'],
+  ].map(([id,,l])=>`<div class="chart-box-plr"><h4>${l}</h4><canvas id="${id}"></canvas></div>`).join('');
+
+  // Render all charts
+  [
+    'plr-wl:wl_spread','plr-swl:set_wl_spread',
+    'plr-pts:score','plr-k:kills','plr-a:assists','plr-d:deaths','plr-kd:kd_spread',
+    'plr-wk:weapon_kills','plr-gk:grenade_kills','plr-mk:melee_kills','plr-ok:other_kills','plr-qi:qike',
+  ].forEach(pair => {
+    const [id,key] = pair.split(':');
+    lineChart(id, key);
   });
 
-  document.getElementById('recent-body').innerHTML = recent.map(g => {
-    const wc = teamColor(g.winning_team, data);
-    return `<tr>
-      <td class="dim">G${g.game_num_season}</td>
-      <td>${g.map}</td>
-      <td class="dim">${g.matchup}</td>
-      <td>${teamBadge(g.winning_team, wc)}</td>
-      ${players.map(p => {
-        const ps = g.players[p];
-        return `<td><span class="kd"><span class="kills">${ps.kills}</span><span class="slash">/</span><span class="deaths">${ps.deaths}</span></span></td>`;
-      }).join('')}
-    </tr>`;
-  }).join('');
+  // ── TEAM LEADERBOARD ──
+  document.getElementById('sh-team').innerHTML = sectionHdr('TEAM LEADERBOARD');
+  const sortedTeams = Object.entries(teams).sort((a,b)=>b[1].win_pct-a[1].win_pct);
+
+  function teamRow(tn,t,cells){
+    const c=t.color||'#aaa';
+    return `<tr><td>${teamBadge(tn,c)}</td>${cells.map(x=>`<td>${x}</td>`).join('')}</tr>`;
+  }
+
+  document.getElementById('team-tables').innerHTML = `
+    <div class="box tbl-wrap" style="padding:0;margin-bottom:8px"><table class="ctbl">
+      <thead><tr><th>TEAM</th><th>W</th><th>L</th><th>W/L</th><th>WIN%</th><th>SW</th><th>SL</th><th>SW/L</th><th>SWIN%</th></tr></thead>
+      <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
+        `<span class="good">${t.wins}</span>`,`<span class="bad">${t.losses}</span>`,
+        g_(t.wl_spread,true),pct_(t.win_pct),
+        `<span class="good">${t.set_wins}</span>`,`<span class="bad">${t.set_losses}</span>`,
+        g_(t.set_wl_spread,true),pct_(t.set_win_pct),
+      ])).join('')}</tbody>
+    </table></div>
+
+    <div class="box tbl-wrap" style="padding:0;margin-bottom:8px"><table class="ctbl">
+      <thead><tr><th>TEAM</th><th>PTS</th><th>K</th><th>A</th><th>D</th><th>K/D</th><th>KDR</th></tr></thead>
+      <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
+        t.total_score,t.total_kills,t.total_assists,t.total_deaths,
+        g_(t.kd_spread,true),`<span class="teal">${fmtKdr(t.kdr)}</span>`,
+      ])).join('')}</tbody>
+    </table></div>
+
+    <div class="box tbl-wrap" style="padding:0"><table class="ctbl">
+      <thead><tr><th>TEAM</th><th>WPN</th><th>GRN</th><th>MEL</th><th>OTH</th><th>AVG MOV</th>
+        ${combineSui?`<th>B+S</th>`:`<th>BTR</th><th>SUI</th>`}<th>AVG QIKE</th></tr></thead>
+      <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
+        t.weapon_kills,t.grenade_kills,t.melee_kills,t.other_kills,
+        `<span class="teal">${t.avg_mov}</span>`,
+        ...(combineSui?[t.betrayals+t.suicides]:[t.betrayals,t.suicides]),
+        `<span class="teal">${t.avg_qike.toFixed(4)}</span>`,
+      ])).join('')}</tbody>
+    </table></div>`;
+
+  // Team charts — 1 per row
+  const teamChartDefs = [
+    ['team-wl','wl_spread','TEAM W/L SPREAD'],
+    ['team-swl','set_wl_spread','TEAM SET W/L SPREAD'],
+    ['team-qi','qike','TEAM CUMULATIVE QIKE'],
+  ];
+  document.getElementById('team-charts').innerHTML = teamChartDefs.map(([id,,l])=>
+    `<div class="chart-box-team"><h4>${l}</h4><canvas id="${id}"></canvas></div>`
+  ).join('');
+
+  const teamLabels = Object.values(teams)[0]?.game_labels || [];
+  teamChartDefs.forEach(([id,key])=>{
+    const datasets = sortedTeams.map(([tn,t])=>({
+      label:tn, data:(t.cumulative||{})[key]||[],
+      borderColor:t.color, backgroundColor:'transparent',
+      borderWidth:1.5, pointRadius:0, pointHoverRadius:3, tension:0.3,
+    }));
+    makeChart(id,'line',teamLabels,datasets,{
+      plugins:{legend:{position:'top',labels:{color:'#7aacba',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
+    });
+  });
 });
 </script>
 </body>

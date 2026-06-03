@@ -1,180 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Halo Nite S6 — Teams</title>
-  <link rel="stylesheet" href="css/halo.css">
-  <style>
-    .team-color-bar { height: 3px; width: 100%; margin-bottom: 4px; }
-    .matchup-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 18px 20px;
-      margin-bottom: 14px;
-    }
-    .matchup-title {
-      font-family: var(--font-halo);
-      font-size: 1.1rem;
-      letter-spacing: .06em;
-      margin-bottom: 14px;
-    }
-    .matchup-vs {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .vs-team {
-      flex: 1;
-      text-align: center;
-    }
-    .vs-team .t-name {
-      font-family: var(--font-halo);
-      font-size: 1.4rem;
-      letter-spacing: .06em;
-    }
-    .vs-team .t-wins {
-      font-family: var(--font-halo);
-      font-size: 2.4rem;
-      line-height: 1;
-    }
-    .vs-team .t-pct {
-      font-size: .68rem;
-      letter-spacing: .15em;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
-    .vs-divider {
-      font-family: var(--font-halo);
-      font-size: 1rem;
-      color: var(--text-dim);
-      letter-spacing: .2em;
-    }
-    .matchup-bar-bg { height: 10px; background: var(--border2); margin-top: 14px; position: relative; overflow: hidden; }
-    .matchup-bar-a { position: absolute; left: 0; top: 0; bottom: 0; transition: width .4s; }
-    .matchup-bar-b { position: absolute; right: 0; top: 0; bottom: 0; transition: width .4s; }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halo Nite — Teams</title>
+<link rel="stylesheet" href="css/halo.css">
+<style>
+.three-col-wrap { overflow-x: auto; }
+.three-col { display: grid; grid-template-columns: repeat(3, minmax(320px, 1fr)); gap: 16px; min-width: 960px; }
+@media (max-width: 700px) { .three-col { min-width: unset; grid-template-columns: 1fr; } }
+.mu-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mu-header { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); }
+.mu-header .mu-name { font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; letter-spacing: .1em; }
+.mu-header .mu-record { font-size: .7rem; letter-spacing: .15em; color: var(--text-dim); margin-top: 4px; }
+.inner-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--border2); }
+.inner-tbl td:first-child { color: var(--text-dim); font-size: .68rem; letter-spacing: .12em; }
+.inner-tbl td:last-child  { text-align: right; font-family: var(--font-head); font-weight: 600; font-size: .93rem; }
+.inner-tbl tr:last-child td { border-bottom: none; }
+.inner-tbl { width: 100%; border-collapse: collapse; }
+.mini-bar { display: flex; gap: 3px; align-items: center; font-size: .78rem; }
+.mini-bar .bar { flex: 1; height: 4px; }
+</style>
 </head>
 <body>
 <div id="nav"></div>
 <main>
-  <div id="loading"><span class="dot-pulse">LOADING MISSION DATA</span></div>
-  <div id="content" style="display:none">
-    <h1 class="page-title">Team Stats</h1>
-    <p class="page-subtitle">FACTION PERFORMANCE — SEASON 6</p>
-
-    <div id="sh-matchups"></div>
-    <div id="matchups-section"></div>
-
-    <div id="sh-teams"></div>
-    <div class="chart-grid">
-      <div class="chart-box"><h3>WIN RATE BY TEAM</h3><canvas id="winpct-chart"></canvas></div>
-      <div class="chart-box"><h3>AVG KILLS BY TEAM</h3><canvas id="kills-chart"></canvas></div>
-    </div>
-
-    <div id="sh-tbl"></div>
-    <div class="box tbl-wrap">
-      <table id="teams-tbl">
-        <thead><tr>
-          <th>TEAM</th>
-          <th class="r">W</th>
-          <th class="r">L</th>
-          <th class="r">GAMES</th>
-          <th class="r">WIN%</th>
-          <th class="r">AVG KILLS</th>
-          <th class="r">AVG DEATHS</th>
-        </tr></thead>
-        <tbody id="teams-body"></tbody>
-      </table>
-    </div>
-  </div>
+<div id="loading"><span>LOADING MISSION DATA...</span></div>
+<div id="content" style="display:none">
+  <h1 class="page-title">Team Stats</h1>
+  <p class="page-subtitle" id="page-sub"></p>
+  <div id="sh-mu"></div>
+  <div class="three-col-wrap"><div class="three-col" id="matchup-section"></div></div>
+</div>
 </main>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="js/common.js"></script>
 <script>
-renderNav('teams.html');
+// Register datalabels plugin; disable globally so only pctStackOpts charts use it
+Chart.register(ChartDataLabels);
+Chart.defaults.plugins.datalabels = { display: false };
 
+renderNav('teams.html', null);
 loadStats().then(data => {
+  renderNav('teams.html', data);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = 'block';
 
-  const { teams, matchups } = data;
+  const sd = getSeasonData(data);
+  const { players } = data;
+  const { teams, matchups, games } = sd;
 
-  document.getElementById('sh-matchups').innerHTML = sectionHdr('MATCHUP RECORDS');
-  document.getElementById('sh-teams').innerHTML = sectionHdr('TEAM PERFORMANCE CHARTS');
-  document.getElementById('sh-tbl').innerHTML = sectionHdr('ALL TEAMS');
+  document.getElementById('page-sub').textContent = `${getCurrentSeason()} — FACTION ANALYSIS`;
+  document.getElementById('sh-mu').innerHTML = sectionHdr('MATCHUP BREAKDOWNS');
 
-  // Matchup cards
-  const muSection = document.getElementById('matchups-section');
-  muSection.innerHTML = Object.entries(matchups).map(([name, mu]) => {
-    const colorA = data.team_colors[mu.team_a] || '#aaa';
-    const colorB = data.team_colors[mu.team_b] || '#aaa';
-    const total = mu.games || 1;
-    const pctA = Math.round(mu.team_a_wins / total * 100);
-    const pctB = Math.round(mu.team_b_wins / total * 100);
-    return `
-    <div class="matchup-card">
-      <div class="matchup-title">${name} &nbsp;<span style="font-size:.7rem;color:var(--text-dim);letter-spacing:.2em">${mu.games} GAMES</span></div>
-      <div class="matchup-vs">
-        <div class="vs-team">
-          <div class="t-name" style="color:${colorA}">${mu.team_a}</div>
-          <div class="t-wins" style="color:${colorA};text-shadow:0 0 12px ${colorA}44">${mu.team_a_wins}</div>
-          <div class="t-pct">WINS</div>
+  const matchupOrder = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
+  let chartIdx = 0;
+
+  document.getElementById('matchup-section').innerHTML = matchupOrder.map(muName => {
+    const mu = matchups[muName];
+    if (!mu) return '';
+    const ta = mu.team_a, tb = mu.team_b;
+    const ca = teamColor(ta, data), cb = teamColor(tb, data);
+    const ta_t = teams[ta] || {}, tb_t = teams[tb] || {};
+    const muGames = games.filter(g => g.matchup === muName);
+    const uid = muName.replace(/[^a-z]/gi,'');
+
+    // Player → team assignment (use most common team for each player across these games)
+    const plrTeams = {};
+    players.forEach(p => {
+      const teamCounts = {};
+      muGames.forEach(g => {
+        const t = g.players[p]?.team;
+        if (t) teamCounts[t] = (teamCounts[t]||0)+1;
+      });
+      plrTeams[p] = Object.entries(teamCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+    });
+
+    const teamPlayers = { [ta]: players.filter(p=>plrTeams[p]===ta), [tb]: players.filter(p=>plrTeams[p]===tb) };
+
+    // Kills and points per player in this matchup
+    const plrKills = {}, plrScore = {};
+    players.forEach(p => { plrKills[p]=0; plrScore[p]=0; });
+    muGames.forEach(g => {
+      players.forEach(p => {
+        plrKills[p] += g.players[p]?.kills||0;
+        plrScore[p] += g.players[p]?.score||0;
+      });
+    });
+
+    // Kill styles for each team
+    const teamStyles = { [ta]:{wk:0,gk:0,mk:0,ok:0,total:0}, [tb]:{wk:0,gk:0,mk:0,ok:0,total:0} };
+    muGames.forEach(g => {
+      players.forEach(p => {
+        const t = g.players[p]?.team;
+        if (!t || !teamStyles[t]) return;
+        const ps = g.players[p];
+        teamStyles[t].wk += ps.weapon_kills||0;
+        teamStyles[t].gk += ps.grenade_kills||0;
+        teamStyles[t].mk += ps.melee_kills||0;
+        teamStyles[t].ok += ps.other_kills||0;
+        teamStyles[t].total += ps.kills||0;
+      });
+    });
+
+    // Assist pie (assisted vs solo) per team
+    const teamAssists = { [ta]:{assisted:0,solo:0}, [tb]:{assisted:0,solo:0} };
+    muGames.forEach(g => {
+      [ta,tb].forEach(tn => {
+        const tps = players.filter(p=>g.players[p]?.team===tn);
+        const assists = tps.reduce((s,p)=>s+(g.players[p]?.assists||0),0);
+        const kills   = tps.reduce((s,p)=>s+(g.players[p]?.kills||0),0);
+        teamAssists[tn].assisted += assists;
+        teamAssists[tn].solo     += Math.max(0, kills - assists);
+      });
+    });
+
+    return `<div class="mu-col">
+      <div class="mu-header" style="border-top:3px solid var(--teal-dim)">
+        <div class="mu-name">
+          <span style="color:${ca}">${ta}</span>
+          <span style="color:var(--text-dim);margin:0 8px;font-size:.8rem">vs</span>
+          <span style="color:${cb}">${tb}</span>
         </div>
-        <div class="vs-divider">VS</div>
-        <div class="vs-team">
-          <div class="t-name" style="color:${colorB}">${mu.team_b}</div>
-          <div class="t-wins" style="color:${colorB};text-shadow:0 0 12px ${colorB}44">${mu.team_b_wins}</div>
-          <div class="t-pct">WINS</div>
-        </div>
+        <div class="mu-record">${mu.games} GAMES · ${mu.a_wins}–${mu.b_wins} (${ta} ${mu.a_win_pct}%)</div>
       </div>
-      <div class="matchup-bar-bg">
-        <div class="matchup-bar-a" style="width:${pctA}%;background:${colorA};opacity:.7"></div>
-        <div class="matchup-bar-b" style="width:${pctB}%;background:${colorB};opacity:.7"></div>
+
+      <!-- Win rate row -->
+      <div class="box" style="padding:12px">
+        <div style="font-family:var(--font-head);font-size:.65rem;letter-spacing:.2em;color:var(--text-dim);margin-bottom:8px">WIN RATE</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="color:${ca};font-family:var(--font-head);font-weight:700;width:36px">${mu.a_wins}W</span>
+          <div style="flex:1;height:6px;background:var(--border2);position:relative">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:${mu.a_win_pct}%;background:${ca};opacity:.8"></div>
+          </div>
+          <span style="color:${cb};font-family:var(--font-head);font-weight:700;width:36px;text-align:right">${mu.b_wins}W</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.62rem;color:var(--text-dim)">
+          <span>${ta} ${mu.a_win_pct}%</span><span>${tb} ${mu.b_win_pct}%</span>
+        </div>
+        ${mu.a_set_wins !== undefined ? `
+        <div style="font-family:var(--font-head);font-size:.62rem;letter-spacing:.15em;color:var(--text-dim);margin-top:10px">SET WINS: <span style="color:${ca}">${ta} ${mu.a_set_wins}</span> — <span style="color:${cb}">${tb} ${mu.b_set_wins}</span></div>
+        ` : ''}
+        <div style="font-size:.62rem;color:var(--text-dim);margin-top:4px">${ta} AVG MOV: <span style="color:var(--teal)">${ta_t.avg_mov||0}</span></div>
+      </div>
+
+      <!-- Player point/kill contributions per team (points first) -->
+      <div class="box" style="padding:12px">
+        <div style="font-family:var(--font-head);font-size:.65rem;letter-spacing:.2em;color:var(--text-dim);margin-bottom:8px">POINT SHARE BY PLAYER (%)</div>
+        <canvas id="ps-${uid}" style="max-height:140px"></canvas>
+      </div>
+
+      <div class="box" style="padding:12px">
+        <div style="font-family:var(--font-head);font-size:.65rem;letter-spacing:.2em;color:var(--text-dim);margin-bottom:8px">KILL SHARE BY PLAYER (%)</div>
+        <canvas id="ks-${uid}" style="max-height:140px"></canvas>
+      </div>
+
+      <!-- Kill style pie per team -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${[ta,tb].map(tn => {
+          const st = teamStyles[tn];
+          const tc = teamColor(tn, data);
+          const uid2 = uid+tn.replace(/[^a-z]/gi,'');
+          return `<div class="box" style="padding:10px;border-top:2px solid ${tc}">
+            <div style="font-family:var(--font-head);font-size:.6rem;color:${tc};letter-spacing:.15em;margin-bottom:6px">${tn} KILL STYLES</div>
+            <canvas id="stl-${uid2}" style="max-height:150px"></canvas>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Assisted vs solo kills per team -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${[ta,tb].map(tn => {
+          const as = teamAssists[tn];
+          const tc = teamColor(tn, data);
+          const uid3 = uid+tn.replace(/[^a-z]/gi,'')+'a';
+          return `<div class="box" style="padding:10px;border-top:2px solid ${tc}">
+            <div style="font-family:var(--font-head);font-size:.6rem;color:${tc};letter-spacing:.15em;margin-bottom:6px">${tn} KILL TYPE</div>
+            <canvas id="apt-${uid3}" style="max-height:150px"></canvas>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   }).join('');
 
-  // Team table — sorted by win %
-  const sortedTeams = Object.entries(teams).sort((a,b) => b[1].win_pct - a[1].win_pct);
+  // Render charts after HTML is in DOM
+  matchupOrder.forEach(muName => {
+    const mu = matchups[muName];
+    if (!mu) return;
+    const ta = mu.team_a, tb = mu.team_b;
+    const uid = muName.replace(/[^a-z]/gi,'');
+    const muGames = games.filter(g => g.matchup === muName);
 
-  document.getElementById('teams-body').innerHTML = sortedTeams.map(([name, t]) => {
-    const c = t.color || '#aaa';
-    return `<tr>
-      <td>${teamBadge(name, c)}</td>
-      <td class="r good">${t.wins}</td>
-      <td class="r bad">${t.losses}</td>
-      <td class="r dim">${t.games}</td>
-      <td class="r ${t.win_pct >= 50 ? 'good' : 'bad'}">${t.win_pct}%</td>
-      <td class="r">${t.avg_kills}</td>
-      <td class="r dim">${t.avg_deaths}</td>
-    </tr>`;
-  }).join('');
+    const plrTeams = {};
+    players.forEach(p => {
+      const tc = {};
+      muGames.forEach(g => { const t=g.players[p]?.team; if(t) tc[t]=(tc[t]||0)+1; });
+      plrTeams[p] = Object.entries(tc).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    });
 
-  // Charts
-  const teamNames = sortedTeams.map(([n]) => n);
-  const teamColors = sortedTeams.map(([n, t]) => t.color || '#aaa');
-  const teamColorsBg = teamColors.map(c => c + '88');
+    const plrKills={}, plrScore={};
+    players.forEach(p=>{ plrKills[p]=0; plrScore[p]=0; });
+    muGames.forEach(g => players.forEach(p => {
+      plrKills[p] += g.players[p]?.kills||0;
+      plrScore[p] += g.players[p]?.score||0;
+    }));
 
-  makeChart('winpct-chart', 'bar', teamNames,
-    [{ data: sortedTeams.map(([,t]) => t.win_pct), backgroundColor: teamColorsBg, borderColor: teamColors, borderWidth: 1 }],
-    {
-      plugins: { legend: { display: false } },
-      scales: {
-        y: {
-          ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 10 }, callback: v => v + '%' },
-          grid: { color: 'rgba(26,58,68,.5)' },
+    // 100% stacked bar charts — points first, then kills
+    const teamPlayers = { [ta]: players.filter(p=>plrTeams[p]===ta), [tb]: players.filter(p=>plrTeams[p]===tb) };
+    const ksLabels = [ta, tb];
+    const allPlayers = [...(teamPlayers[ta]||[]), ...(teamPlayers[tb]||[])];
+
+    const ta_k = allPlayers.filter(p=>teamPlayers[ta]?.includes(p)).reduce((s,p)=>s+plrKills[p],0)||1;
+    const tb_k = allPlayers.filter(p=>teamPlayers[tb]?.includes(p)).reduce((s,p)=>s+plrKills[p],0)||1;
+    const ta_s = allPlayers.filter(p=>teamPlayers[ta]?.includes(p)).reduce((s,p)=>s+plrScore[p],0)||1;
+    const tb_s = allPlayers.filter(p=>teamPlayers[tb]?.includes(p)).reduce((s,p)=>s+plrScore[p],0)||1;
+
+    function pctStackOpts(rawByPlayer) {
+      return {
+        plugins: {
+          legend: { position:'top', labels:{ color:'#7aacba', font:{family:'Share Tech Mono',size:12}, boxWidth:10 } },
+          tooltip: { callbacks: { label: ctx => {
+            const p = allPlayers[ctx.datasetIndex];
+            const raw = rawByPlayer[p]?.[ctx.dataIndex]||0;
+            return ` ${dn(p,data)}: ${raw} (${ctx.parsed.x.toFixed(1)}%)`;
+          }}},
+          datalabels: {
+            display: ctx => ctx.dataset.data[ctx.dataIndex] >= 6,
+            formatter: v => v.toFixed(1) + '%',
+            color: 'rgba(255,255,255,0.92)',
+            font: { family: 'Share Tech Mono', size: 11, weight: 'bold' },
+            anchor: 'center',
+            align: 'center',
+            clip: true,
+          },
         },
-        x: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: 'rgba(26,58,68,.5)' } },
-      },
+        scales: {
+          x: { stacked:true, max:100, ticks:{ color:'#3a7080', font:{family:'Share Tech Mono',size:12}, callback:v=>v+'%' }, grid:{color:'rgba(26,58,68,.4)'} },
+          y: { stacked:true, ticks:{ color:'#3a7080', font:{family:'Share Tech Mono',size:12} }, grid:{color:'rgba(26,58,68,.4)'} },
+        },
+      };
     }
-  );
 
-  makeChart('kills-chart', 'bar', teamNames,
-    [{ data: sortedTeams.map(([,t]) => t.avg_kills), backgroundColor: teamColorsBg, borderColor: teamColors, borderWidth: 1 }],
-    { plugins: { legend: { display: false } } }
-  );
+    const scoreRaw={}, killRaw={};
+    allPlayers.forEach(p=>{
+      scoreRaw[p]=[teamPlayers[ta]?.includes(p)?plrScore[p]:0, teamPlayers[tb]?.includes(p)?plrScore[p]:0];
+      killRaw[p] =[teamPlayers[ta]?.includes(p)?plrKills[p]:0, teamPlayers[tb]?.includes(p)?plrKills[p]:0];
+    });
+
+    // Points first
+    makeChart(`ps-${uid}`, 'bar', ksLabels,
+      allPlayers.map(p=>({
+        label: dn(p,data),
+        data: [teamPlayers[ta]?.includes(p)?+(plrScore[p]/ta_s*100).toFixed(1):0, teamPlayers[tb]?.includes(p)?+(plrScore[p]/tb_s*100).toFixed(1):0],
+        backgroundColor: pc(p,data)+'bb', borderColor: pc(p,data), borderWidth:1,
+      })),
+      pctStackOpts(scoreRaw)
+    );
+
+    // Kills second
+    makeChart(`ks-${uid}`, 'bar', ksLabels,
+      allPlayers.map(p=>({
+        label: dn(p,data),
+        data: [teamPlayers[ta]?.includes(p)?+(plrKills[p]/ta_k*100).toFixed(1):0, teamPlayers[tb]?.includes(p)?+(plrKills[p]/tb_k*100).toFixed(1):0],
+        backgroundColor: pc(p,data)+'bb', borderColor: pc(p,data), borderWidth:1,
+      })),
+      pctStackOpts(killRaw)
+    );
+
+    // Kill style pies
+    const teamStyles = { [ta]:{wk:0,gk:0,mk:0,ok:0}, [tb]:{wk:0,gk:0,mk:0,ok:0} };
+    muGames.forEach(g => players.forEach(p => {
+      const t = g.players[p]?.team;
+      if (!t || !teamStyles[t]) return;
+      const ps = g.players[p];
+      teamStyles[t].wk += ps.weapon_kills||0;
+      teamStyles[t].gk += ps.grenade_kills||0;
+      teamStyles[t].mk += ps.melee_kills||0;
+      teamStyles[t].ok += ps.other_kills||0;
+    }));
+
+    const teamAssists = { [ta]:{assisted:0,solo:0}, [tb]:{assisted:0,solo:0} };
+    muGames.forEach(g => [ta,tb].forEach(tn => {
+      const tps = players.filter(p=>g.players[p]?.team===tn);
+      const assists = tps.reduce((s,p)=>s+(g.players[p]?.assists||0),0);
+      const kills   = tps.reduce((s,p)=>s+(g.players[p]?.kills||0),0);
+      teamAssists[tn].assisted += assists;
+      teamAssists[tn].solo     += Math.max(0,kills-assists);
+    }));
+
+    [ta,tb].forEach(tn => {
+      const st = teamStyles[tn];
+      const tc = teamColor(tn,data);
+      const uid2 = uid+tn.replace(/[^a-z]/gi,'');
+      const tot = st.wk+st.gk+st.mk+st.ok||1;
+      makePie(`stl-${uid2}`,
+        [`Weapon (${(st.wk/tot*100).toFixed(0)}%)`,`Grenade (${(st.gk/tot*100).toFixed(0)}%)`,
+         `Melee (${(st.mk/tot*100).toFixed(0)}%)`,`Other (${(st.ok/tot*100).toFixed(0)}%)`],
+        [st.wk,st.gk,st.mk,st.ok],['#4488ff','#ff6a00','#44dd88','#c088ff']
+      );
+      const as = teamAssists[tn];
+      const uid3 = uid2+'a';
+      const atot = as.assisted+as.solo||1;
+      makePie(`apt-${uid3}`,
+        [`Assisted (${(as.assisted/atot*100).toFixed(0)}%)`,`Solo (${(as.solo/atot*100).toFixed(0)}%)`],
+        [as.assisted,as.solo],[tc,'#888888']
+      );
+    });
+  });
 });
 </script>
 </body>
