@@ -60,7 +60,7 @@ loadStats().then(data => {
   const sd = getSeasonData(data);
   const { players } = data;
   const { games, maps, matchups, teams, halo_nites } = sd;
-  const isLifetime = getCurrentSeason() === 'Lifetime';
+  const isLifetime = isMultiSeasonView();
 
   document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ALL MATCHES`;
   // Filters
@@ -104,7 +104,7 @@ function applyFilters() {
 function renderGames() {
   const data = globalData;
   const { players } = data;
-  const isLifetime = getCurrentSeason() === 'Lifetime';
+  const isLifetime = isMultiSeasonView();
   const tbody = document.getElementById('games-body');
 
   tbody.innerHTML = filtered.map((g, idx) => {

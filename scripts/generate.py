@@ -51,7 +51,7 @@ _TEAM_NAME_SET    = set(TEAM_NAMES.values())
 _MATCHUP_NAME_SET = set(MATCHUP_NAMES.values())
 
 # Season keys that span multiple seasons and should use lifetime labels/nite numbers
-_MULTI_SEASON = (None, 'Lifetime', 'S3+', 'S6+')
+_MULTI_SEASON = (None, 'Lifetime')
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -68,8 +68,6 @@ def _s(v):
 
 def should_combine(season_num):
     """True when suicides+betrayals are combined (pre-S6 data)."""
-    if season_num == 'S6+':
-        return False
     if season_num in _MULTI_SEASON:
         return True
     try:
@@ -917,22 +915,10 @@ def main():
         season_data[f'S{sn}'] = build_season_data(s_games, players, medal_suffixes, sn)
         print(f'  S{sn}: {len(s_games)} games')
 
-    # Season 3 Onward (S3, S4, S6)
-    s3p_df = df[df['Season'] >= 3].reset_index(drop=True)
-    s3p_games = build_games(s3p_df, players, medal_suffixes, season_num='S3+')
-    season_data['S3+'] = build_season_data(s3p_games, players, medal_suffixes, 'S3+')
-    print(f'  S3+: {len(s3p_games)} games')
-
-    # Season 6 Onward
-    s6p_df = df[df['Season'] >= 6].reset_index(drop=True)
-    s6p_games = build_games(s6p_df, players, medal_suffixes, season_num='S6+')
-    season_data['S6+'] = build_season_data(s6p_games, players, medal_suffixes, 'S6+')
-    print(f'  S6+: {len(s6p_games)} games')
-
     # Lifetime (all seasons combined)
     season_data['Lifetime'] = build_season_data(all_games, players, medal_suffixes, season_num='Lifetime')
 
-    season_keys = ['Lifetime', 'S3+', 'S6+'] + [f'S{int(s)}' for s in seasons]
+    season_keys = ['Lifetime'] + [f'S{int(s)}' for s in seasons]
 
     out = {
         'seasons':       season_keys,

@@ -98,7 +98,7 @@ loadStats().then(data => {
   const sd = getSeasonData(data);
   const { players } = data;
   const { records, maps, matchups } = sd;
-  const isLifetime = getCurrentSeason() === 'Lifetime';
+  const isLifetime = isMultiSeasonView();
   const combineSui = sd.combine_suicides;
 
   document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ALL-TIME BESTS`;

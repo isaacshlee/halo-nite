@@ -98,36 +98,91 @@ body::after {
 .nav-link:hover { color: var(--teal); }
 .nav-link.active { color: var(--teal); border-bottom-color: var(--teal); }
 
-/* Season selector */
+/* Season picker */
 .nav-season {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-shrink: 0;
 }
 
-.nav-season label {
-  font-size: .7rem;
-  letter-spacing: .2em;
-  color: var(--text-dim);
-}
+.season-picker { position: relative; }
 
-.nav-season select {
+.season-trigger {
   background: var(--surface2);
   border: 1px solid var(--teal-dim);
   color: var(--teal);
   font-family: var(--font-head);
   font-weight: 600;
-  font-size: .85rem;
+  font-size: .82rem;
   letter-spacing: .08em;
-  padding: 4px 10px;
-  outline: none;
+  padding: 6px 12px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
   text-shadow: 0 0 8px var(--teal-glow);
+  transition: border-color .15s;
+  height: 48px;
+}
+.season-trigger:hover { border-color: var(--teal); }
+
+.season-caret { font-size: .65rem; opacity: .7; }
+
+.season-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  min-width: 180px;
+  background: var(--surface2);
+  border: 1px solid var(--teal-dim);
+  box-shadow: 0 8px 24px rgba(0,0,0,.6), 0 0 16px var(--teal-glow);
+  z-index: 200;
+  padding: 8px 0 0;
+}
+.season-dropdown.open { display: block; }
+
+.season-opts { padding: 0 4px 4px; }
+
+.season-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: var(--font-head);
+  font-size: .82rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  color: var(--text-mid);
+  transition: background .1s, color .1s;
+}
+.season-opt:hover { background: var(--teal-glow2); color: var(--teal); }
+
+.season-opt input[type=checkbox] {
+  accent-color: var(--teal);
+  width: 13px; height: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
-.nav-season select option { background: var(--surface2); color: var(--text); }
+.season-apply {
+  width: 100%;
+  background: var(--teal-dim);
+  border: none;
+  border-top: 1px solid var(--teal-dim);
+  color: var(--bg);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: .82rem;
+  letter-spacing: .18em;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: background .12s;
+}
+.season-apply:hover { background: var(--teal); }
 
 /* ── LAYOUT ──────────────────────────────────────────────────────────────── */
 main { max-width: 1200px; margin: 0 auto; padding: 28px 16px 60px; }

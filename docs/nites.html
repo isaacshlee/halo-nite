@@ -50,7 +50,7 @@ loadStats().then(data => {
   const sd = getSeasonData(data);
   const { players } = data;
   const { halo_nites } = sd;
-  const isLifetime = getCurrentSeason() === 'Lifetime';
+  const isLifetime = isMultiSeasonView();
   const combineSui = sd.combine_suicides;
 
   document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ${halo_nites.length} HALO NITES`;
