@@ -157,8 +157,23 @@ loadStats().then(data => {
   // ── PLAYER LEADERBOARD ──
   document.getElementById('sh-plr').innerHTML = sectionHdr('PLAYER LEADERBOARD');
 
-  function g_(v,pos) { return `<span class="${v>=0?(pos?'good':'bad'):(pos?'bad':'good')}">${v>0?'+':''}${v}</span>`; }
-  function pct_(v,t=50) { return `<span class="${v>=t?'good':'bad'}">${v}%</span>`; }
+  function gradColor(val, min, max) {
+    const t = max === min ? 0.5 : Math.max(0, Math.min(1, (val - min) / (max - min)));
+    const r = Math.round(0xf8 + t * (0x4a - 0xf8));
+    const g = Math.round(0x71 + t * (0xde - 0x71));
+    const b = Math.round(0x71 + t * (0x80 - 0x71));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // Gradient helpers: inv=true means lower is better (green for lowest)
+  function gc(vals, val, inv=false) {
+    const mn=Math.min(...vals), mx=Math.max(...vals);
+    return inv ? gradColor(val,mx,mn) : gradColor(val,mn,mx);
+  }
+  function gN(vals,val,inv=false){ return `<span style="color:${gc(vals,val,inv)}">${val}</span>`; }
+  function gD(vals,val,dec=2,inv=false){ return `<span style="color:${gc(vals,val,inv)}">${Number(val).toFixed(dec)}</span>`; }
+  function gS(vals,val){ return `<span style="color:${gc(vals,val)}">${val>0?'+':''}${val}</span>`; }
+  function gP(vals,val,inv=false){ return `<span style="color:${gc(vals,val,inv)}">${val}%</span>`; }
 
   function plrRow(p, cells) {
     const c = pc(p, data);
@@ -168,14 +183,21 @@ loadStats().then(data => {
     </tr>`;
   }
 
+  // Precompute per-column value arrays for gradient scaling
+  const pV = k => players.map(p => +aggregates[p][k] || 0);
+  const pBS = players.map(p => aggregates[p].total_betrayals + aggregates[p].total_suicides);
+  const pBtr = players.map(p => aggregates[p].total_betrayals);
+  const pSui = players.map(p => aggregates[p].total_suicides);
+  const pKcdRnd = players.map(p => Math.round(aggregates[p].kcd_spread));
+
   // Table 1
   document.getElementById('plr-t1-body').innerHTML = players.map(p=>{
     const a=aggregates[p];
     return plrRow(p,[
-      `<span class="good">${a.wins}</span>`,`<span class="bad">${a.losses}</span>`,
-      g_(a.wl_spread,true), pct_(a.win_pct),
-      `<span class="good">${a.set_wins}</span>`,`<span class="bad">${a.set_losses}</span>`,
-      g_(a.set_wl_spread,true), pct_(a.set_win_pct),
+      gN(pV('wins'),a.wins), gN(pV('losses'),a.losses,true),
+      gS(pV('wl_spread'),a.wl_spread), gP(pV('win_pct'),a.win_pct),
+      gN(pV('set_wins'),a.set_wins), gN(pV('set_losses'),a.set_losses,true),
+      gS(pV('set_wl_spread'),a.set_wl_spread), gP(pV('set_win_pct'),a.set_win_pct),
     ]);
   }).join('');
 
@@ -183,10 +205,14 @@ loadStats().then(data => {
   document.getElementById('plr-t2-body').innerHTML = players.map(p=>{
     const a=aggregates[p];
     return plrRow(p,[
-      a.total_score,a.total_kills,a.total_assists,a.total_deaths,
-      a.total_kc.toFixed(0), g_(a.kd_spread,true),
-      g_(Math.round(a.kcd_spread),true),
-      `<span class="teal">${fmtKdr(a.kdr)}</span>`,
+      gN(pV('total_score'),a.total_score),
+      gN(pV('total_kills'),a.total_kills),
+      gN(pV('total_assists'),a.total_assists),
+      gN(pV('total_deaths'),a.total_deaths,true),
+      gD(pV('total_kc'),a.total_kc,0),
+      gS(pV('kd_spread'),a.kd_spread),
+      gS(pKcdRnd,Math.round(a.kcd_spread)),
+      gD(pV('kdr'),a.kdr,2),
     ]);
   }).join('');
 
@@ -197,10 +223,17 @@ loadStats().then(data => {
     <th>AVG QIKE</th>`;
   document.getElementById('plr-t3-body').innerHTML = players.map(p=>{
     const a=aggregates[p];
+    const bsVal = a.total_betrayals+a.total_suicides;
     return plrRow(p,[
-      a.total_weapon_kills,a.total_grenade_kills,a.total_melee_kills,a.total_other_kills,a.total_medals,
-      ...(combineSui?[a.total_betrayals+a.total_suicides]:[a.total_betrayals,a.total_suicides]),
-      `<span class="teal">${a.avg_qike.toFixed(4)}</span>`,
+      gN(pV('total_weapon_kills'),a.total_weapon_kills),
+      gN(pV('total_grenade_kills'),a.total_grenade_kills),
+      gN(pV('total_melee_kills'),a.total_melee_kills),
+      gN(pV('total_other_kills'),a.total_other_kills),
+      gN(pV('total_medals'),a.total_medals),
+      ...(combineSui
+        ? [gN(pBS,bsVal,true)]
+        : [gN(pBtr,a.total_betrayals,true), gN(pSui,a.total_suicides,true)]),
+      gD(pV('avg_qike'),a.avg_qike,4),
     ]);
   }).join('');
 
@@ -217,7 +250,7 @@ loadStats().then(data => {
   }
   function lineChart(id, key) {
     makeChart(id,'line',labels,cumDS(key),{
-      plugins:{legend:{position:'top',labels:{color:'#7aacba',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
+      plugins:{legend:{position:'top',labels:{color:'#9ac8d8',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
     });
   }
 
@@ -250,41 +283,60 @@ loadStats().then(data => {
 
   // ── TEAM LEADERBOARD ──
   document.getElementById('sh-team').innerHTML = sectionHdr('TEAM LEADERBOARD');
-  const sortedTeams = Object.entries(teams).sort((a,b)=>b[1].win_pct-a[1].win_pct);
+  const TEAM_ORDER = ['Blue','Red','Pink','Green','Gold','Brown'];
+  const sortedTeams = TEAM_ORDER.filter(tn=>teams[tn]).map(tn=>[tn,teams[tn]]);
 
   function teamRow(tn,t,cells){
     const c=t.color||'#aaa';
     return `<tr><td>${teamBadge(tn,c)}</td>${cells.map(x=>`<td>${x}</td>`).join('')}</tr>`;
   }
 
+  // Precompute per-column value arrays for team gradient scaling
+  const tV = k => sortedTeams.map(([,t])=>+t[k]||0);
+  const tBS = sortedTeams.map(([,t])=>t.betrayals+t.suicides);
+  const tBtr = sortedTeams.map(([,t])=>t.betrayals);
+  const tSui = sortedTeams.map(([,t])=>t.suicides);
+
   document.getElementById('team-tables').innerHTML = `
     <div class="box tbl-wrap" style="padding:0;margin-bottom:8px"><table class="ctbl">
       <thead><tr><th>TEAM</th><th>W</th><th>L</th><th>W/L</th><th>WIN%</th><th>SW</th><th>SL</th><th>SW/L</th><th>SWIN%</th></tr></thead>
       <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
-        `<span class="good">${t.wins}</span>`,`<span class="bad">${t.losses}</span>`,
-        g_(t.wl_spread,true),pct_(t.win_pct),
-        `<span class="good">${t.set_wins}</span>`,`<span class="bad">${t.set_losses}</span>`,
-        g_(t.set_wl_spread,true),pct_(t.set_win_pct),
+        gN(tV('wins'),t.wins), gN(tV('losses'),t.losses,true),
+        gS(tV('wl_spread'),t.wl_spread), gP(tV('win_pct'),t.win_pct),
+        gN(tV('set_wins'),t.set_wins), gN(tV('set_losses'),t.set_losses,true),
+        gS(tV('set_wl_spread'),t.set_wl_spread), gP(tV('set_win_pct'),t.set_win_pct),
       ])).join('')}</tbody>
     </table></div>
 
     <div class="box tbl-wrap" style="padding:0;margin-bottom:8px"><table class="ctbl">
       <thead><tr><th>TEAM</th><th>PTS</th><th>K</th><th>A</th><th>D</th><th>K/D</th><th>KDR</th></tr></thead>
       <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
-        t.total_score,t.total_kills,t.total_assists,t.total_deaths,
-        g_(t.kd_spread,true),`<span class="teal">${fmtKdr(t.kdr)}</span>`,
+        gN(tV('total_score'),t.total_score),
+        gN(tV('total_kills'),t.total_kills),
+        gN(tV('total_assists'),t.total_assists),
+        gN(tV('total_deaths'),t.total_deaths,true),
+        gS(tV('kd_spread'),t.kd_spread),
+        gD(tV('kdr'),t.kdr,2),
       ])).join('')}</tbody>
     </table></div>
 
     <div class="box tbl-wrap" style="padding:0"><table class="ctbl">
       <thead><tr><th>TEAM</th><th>WPN</th><th>GRN</th><th>MEL</th><th>OTH</th><th>AVG MOV</th>
         ${combineSui?`<th>B+S</th>`:`<th>BTR</th><th>SUI</th>`}<th>AVG QIKE</th></tr></thead>
-      <tbody>${sortedTeams.map(([tn,t])=>teamRow(tn,t,[
-        t.weapon_kills,t.grenade_kills,t.melee_kills,t.other_kills,
-        `<span class="teal">${t.avg_mov}</span>`,
-        ...(combineSui?[t.betrayals+t.suicides]:[t.betrayals,t.suicides]),
-        `<span class="teal">${t.avg_qike.toFixed(4)}</span>`,
-      ])).join('')}</tbody>
+      <tbody>${sortedTeams.map(([tn,t])=>{
+        const bsVal=t.betrayals+t.suicides;
+        return teamRow(tn,t,[
+          gN(tV('weapon_kills'),t.weapon_kills),
+          gN(tV('grenade_kills'),t.grenade_kills),
+          gN(tV('melee_kills'),t.melee_kills),
+          gN(tV('other_kills'),t.other_kills),
+          gD(tV('avg_mov'),t.avg_mov,2),
+          ...(combineSui
+            ? [gN(tBS,bsVal,true)]
+            : [gN(tBtr,t.betrayals,true), gN(tSui,t.suicides,true)]),
+          gD(tV('avg_qike'),t.avg_qike,4),
+        ]);
+      }).join('')}</tbody>
     </table></div>`;
 
   // Team charts — 1 per row
@@ -305,7 +357,7 @@ loadStats().then(data => {
       borderWidth:1.5, pointRadius:0, pointHoverRadius:3, tension:0.3,
     }));
     makeChart(id,'line',teamLabels,datasets,{
-      plugins:{legend:{position:'top',labels:{color:'#7aacba',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
+      plugins:{legend:{position:'top',labels:{color:'#9ac8d8',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
     });
   });
 });

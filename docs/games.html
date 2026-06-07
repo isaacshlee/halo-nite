@@ -37,7 +37,7 @@ tbody tr.data-row { cursor:pointer; }
   <div class="box tbl-wrap" style="padding:0">
     <table id="games-tbl">
       <thead><tr>
-        <th class="c">GAME</th><th class="c">NITE</th><th>MAP</th><th>MATCHUP</th><th>WINNER</th>
+        <th class="c">GAME</th><th class="c">NITE</th><th>DATE</th><th>MAP</th><th>MATCHUP</th><th>WINNER</th>
         <th style="width:18px"></th>
       </tr></thead>
       <tbody id="games-body"></tbody>
@@ -110,10 +110,12 @@ function renderGames() {
   tbody.innerHTML = filtered.map((g, idx) => {
     const wc = teamColor(g.winning_team, data);
     const gameLabel = isLifetime ? (g.game_num_lifetime||g.game_num_season) : g.game_num_season;
+    const dateStr = g.timestamp ? g.timestamp.slice(0, 10).replace(/-/g, '/') : '—';
     return `
     <tr class="data-row" onclick="toggleExpand(${idx})">
       <td class="c dim">${gameLabel}</td>
       <td class="c dim">${g.halonite_num}</td>
+      <td class="dim" style="font-size:.8rem">${dateStr}</td>
       <td>${g.map}</td>
       <td class="dim">${g.matchup}</td>
       <td>${teamBadge(g.winning_team, wc)}</td>

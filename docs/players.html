@@ -24,6 +24,12 @@
 .medal-list { display:flex;flex-wrap:wrap;gap:3px;padding:6px; }
 .medal-chip { background:var(--surface2);border:1px solid var(--border);padding:2px 7px;font-size:.7rem;display:inline-flex;gap:4px;align-items:center; }
 .medal-chip .mc { font-family:var(--font-head);font-weight:700;font-size:.84rem; }
+.pvp-pair { display:flex;flex-direction:column;gap:8px; }
+.accolade-list { display:flex;flex-direction:column;gap:0; }
+.accolade-row { display:flex;justify-content:space-between;align-items:center;padding:3px 10px;border-bottom:1px solid var(--border2);font-size:.78rem; }
+.accolade-row:last-child { border-bottom:none; }
+.accolade-row .ac-name { color:var(--text-mid); }
+.accolade-row .ac-val { font-family:var(--font-head);font-weight:700;color:var(--teal);font-size:.88rem; }
 </style>
 </head>
 <body>
@@ -111,8 +117,44 @@ loadStats().then(data => {
       <!-- Kill style breakdown -->
       <div class="pie-box">
         <h4>KILL STYLES</h4>
-        <canvas id="ks-${p}" style="max-height:160px"></canvas>
+        <canvas id="ks-${p}" style="max-height:220px"></canvas>
         <div class="pie-caption">Total: ${a.total_kills} kills</div>
+      </div>
+
+      <!-- Kill location -->
+      <div class="pie-box">
+        <h4>KILL LOCATION</h4>
+        <canvas id="kl-${p}" style="max-height:200px"></canvas>
+        <div class="pie-caption">Total: ${a.total_kills} kills</div>
+      </div>
+
+      <!-- Important PvP Moments -->
+      <div class="box" style="padding:8px 10px">
+        <div class="sub-label">IMPORTANT PvP MOMENTS</div>
+        <div class="pvp-pair">
+          <div class="pie-box">
+            <h4>PROTECTOR</h4>
+            <canvas id="pvp-pro-${p}" style="max-height:150px"></canvas>
+          </div>
+          <div class="pie-box">
+            <h4>CLOSE CALL</h4>
+            <canvas id="pvp-cc-${p}" style="max-height:150px"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weapons Used -->
+      <div class="box" style="padding:8px 10px">
+        <div class="sub-label">WEAPONS USED</div>
+        <div style="position:relative;height:340px">
+          <canvas id="wu-${p}"></canvas>
+        </div>
+      </div>
+
+      <!-- Accolades -->
+      <div class="box" style="padding:0">
+        <div style="padding:8px 10px 4px;font-family:var(--font-head);font-size:.6rem;font-weight:600;letter-spacing:.18em;color:var(--text-dim)">ACCOLADES</div>
+        <div class="accolade-list" id="acl-${p}"></div>
       </div>
 
       <!-- Medals -->
@@ -127,12 +169,55 @@ loadStats().then(data => {
     </div>`;
   }).join('');
 
+  const WEAPONS = [
+    ['Brute Shot',      m => (m['Brute Shot Kill']||0)],
+    ['Energy Sword',    m => (m['Sword Kill']||0)],
+    ['Environment',     m => (m['Environmentalist']||0)],
+    ['Frag',            m => (m['Grenade Kill']||0)],
+    ['Fuel Rod Cannon', m => (m['Fuel Rod Cannon Kill']||0)],
+    ['Gravity Hammer',  m => (m['Hammer Kill']||0)],
+    ['Incineration',    m => (m['Incineration']||0)],
+    ['Needler',         m => (m['Supercombine']||0)],
+    ['Plasma Grenade',  m => (m['Plasma Grenade Kill']||0)+(m['Grenade Stick']||0)],
+    ['Rocket',          m => (m['Rocket Kill']||0)],
+    ['Sentinel Beam',   m => (m['Sentinel Beam Kill']||0)],
+    ['Sniper',          m => (m['Sniper Kill']||0)],
+    ['Spartan Laser',   m => (m['Spartan Laser Kill']||0)],
+    ['Turret',          m => (m['Turret Kill']||0)],
+    ['Vehicle',         m => (m['Splatter']||0)+(m['Vehicle Kill']||0)],
+    ['Weaponless Melee',m => (m['Melee Kill']||0)+(m['Beatdown']||0)],
+  ];
+
+  const ACCOLADES = [
+    ['Hail To The King',       'Hail To The King'],
+    ['Hill Dominance',         'Hill Dominance'],
+    ['Killing Spree',          'Killing Spree'],
+    ['Killing Frenzy',         'Killing Frenzy'],
+    ['Running Riot',           'Running Riot'],
+    ['Rampage',                'Rampage'],
+    ['Double Kill',            'Double Kill'],
+    ['Triple Kill',            'Triple Kill'],
+    ['Overkill',               'Overkill'],
+    ['Killtacular',            'Killtacular'],
+    ['Extermination',          'Extermination'],
+    ['Sniper Spree',           'Sniper Spree'],
+    ['Sharpshooter',           'Sharpshooter'],
+    ['Sword Spree',            'Sword Spree'],
+    ['Slice N Dice',           'Slice N Dice'],
+    ['Bulltrue',               'Bulltrue'],
+    ['Shotgun Spree',          'Shotgun Spree'],
+    ['Open Season',            'Open Season'],
+    ['Splatter Spree',         'Splatter Spree'],
+    ['Vehicular Manslaughter', 'Vehicular Manslaughter'],
+  ];
+
   // Render all charts
   players.forEach(p => {
     const c = pc(p, data);
     const a = aggregates[p];
     const opponents = players.filter(q=>q!==p);
     const ka = a.kills_against || {};
+    const medals = a.medals || {};
 
     // Kills against opponents pie
     const kaVals  = opponents.map(o => ka[o]||0);
@@ -154,6 +239,90 @@ loadStats().then(data => {
       ksVals,
       ['#4488ff','#ff6a00','#44dd88','#c088ff']
     );
+
+    // Kill location pie
+    const hillOff = medals['Hill Offense'] || 0;
+    const hillDef = medals['Hill Defense'] || 0;
+    const nonZone = Math.max(0, a.total_kills - hillOff - hillDef);
+    const klTotal = hillOff + hillDef + nonZone || 1;
+    makePie(`kl-${p}`,
+      [
+        `Hill Offense: ${hillOff} (${(hillOff/klTotal*100).toFixed(1)}%)`,
+        `Hill Defense: ${hillDef} (${(hillDef/klTotal*100).toFixed(1)}%)`,
+        `Non-Zone: ${nonZone} (${(nonZone/klTotal*100).toFixed(1)}%)`,
+      ],
+      [hillOff, hillDef, nonZone],
+      ['#ff9944','#44aaff','#888888']
+    );
+
+    // Protector pie
+    const proCount = medals['Protector'] || 0;
+    const proOther = Math.max(0, a.total_kills - proCount);
+    const proTotal = proCount + proOther || 1;
+    makePie(`pvp-pro-${p}`,
+      [
+        `Protector: ${proCount} (${(proCount/proTotal*100).toFixed(1)}%)`,
+        `Other: ${proOther} (${(proOther/proTotal*100).toFixed(1)}%)`,
+      ],
+      [proCount, proOther],
+      ['#ffd700','#334455']
+    );
+
+    // Close Call pie
+    const ccCount = medals['Close Call'] || 0;
+    const ccOther = Math.max(0, a.total_kills - ccCount);
+    const ccTotal = ccCount + ccOther || 1;
+    makePie(`pvp-cc-${p}`,
+      [
+        `Close Call: ${ccCount} (${(ccCount/ccTotal*100).toFixed(1)}%)`,
+        `Other: ${ccOther} (${(ccOther/ccTotal*100).toFixed(1)}%)`,
+      ],
+      [ccCount, ccOther],
+      ['#ff4488','#334455']
+    );
+
+    // Weapons Used horizontal bar chart
+    const wuLabels = WEAPONS.map(([name]) => name);
+    const wuVals   = WEAPONS.map(([,fn]) => fn(medals));
+    const wuCanvas = document.getElementById(`wu-${p}`);
+    if (wuCanvas) {
+      new Chart(wuCanvas, {
+        type: 'bar',
+        data: {
+          labels: wuLabels,
+          datasets: [{ data: wuVals, backgroundColor: c+'99', borderColor: c, borderWidth: 1 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor:'#0a1418', borderColor:'#1a3a44', borderWidth:1,
+              titleColor:'#00e5ff', bodyColor:'#c8eef5',
+              titleFont:{family:'Share Tech Mono',size:13},
+              bodyFont:{family:'Share Tech Mono',size:12},
+            },
+          },
+          scales: {
+            y: { ticks: { color:'#9ac8d8', font:{family:'Share Tech Mono',size:11}, autoSkip:false }, grid:{color:'rgba(26,58,68,.35)'} },
+            x: { ticks: { color:'#6090a2', font:{family:'Share Tech Mono',size:11} }, grid:{color:'rgba(26,58,68,.35)'} },
+          },
+        },
+      });
+    }
+
+    // Accolades list
+    const aclEl = document.getElementById(`acl-${p}`);
+    if (aclEl) {
+      aclEl.innerHTML = ACCOLADES.map(([name, medal]) => {
+        const cnt = medals[medal] || 0;
+        return `<div class="accolade-row">
+          <span class="ac-name">${name}</span>
+          <span class="ac-val">${cnt}</span>
+        </div>`;
+      }).join('');
+    }
   });
 });
 </script>

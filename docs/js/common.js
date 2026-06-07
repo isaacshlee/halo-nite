@@ -198,7 +198,7 @@ function sectionHdr(label) {
 // ── Chart.js helpers ───────────────────────────────────────────────────────
 const CHART_DEFAULTS = {
   plugins: {
-    legend: { labels: { color: '#7aacba', font: { family: 'Share Tech Mono', size: 13 }, boxWidth: 12 } },
+    legend: { labels: { color: '#9ac8d8', font: { family: 'Share Tech Mono', size: 13 }, boxWidth: 12 } },
     tooltip: {
       backgroundColor: '#0a1418', borderColor: '#1a3a44', borderWidth: 1,
       titleColor: '#00e5ff', bodyColor: '#c8eef5',
@@ -207,8 +207,8 @@ const CHART_DEFAULTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 12 } }, grid: { color: 'rgba(26,58,68,.45)' } },
-    y: { ticks: { color: '#3a7080', font: { family: 'Share Tech Mono', size: 12 } }, grid: { color: 'rgba(26,58,68,.45)' } },
+    x: { ticks: { color: '#6090a2', font: { family: 'Share Tech Mono', size: 12 } }, grid: { color: 'rgba(26,58,68,.45)' } },
+    y: { ticks: { color: '#6090a2', font: { family: 'Share Tech Mono', size: 12 } }, grid: { color: 'rgba(26,58,68,.45)' } },
   },
 };
 
@@ -245,7 +245,7 @@ function makePie(canvasId, labels, values, colors, extra = {}) {
     options: {
       responsive: true, maintainAspectRatio: true,
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#7aacba', font: { family: 'Share Tech Mono', size: 12 }, boxWidth: 12 } },
+        legend: { position: 'bottom', labels: { color: '#9ac8d8', font: { family: 'Share Tech Mono', size: 12 }, boxWidth: 12 } },
         tooltip: CHART_DEFAULTS.plugins.tooltip,
       },
       ...extra,
@@ -553,7 +553,8 @@ function _jsMaps(games, players) {
     if (!mn || mn === 'Unknown') continue;
     if (!acc[mn]) {
       acc[mn] = { games:0,seconds:0,mov_sum:0,kills:0,assists:0,deaths:0,
-        weapon_kills:0,grenade_kills:0,melee_kills:0,other_kills:0,betrayals:0,suicides:0 };
+        weapon_kills:0,grenade_kills:0,melee_kills:0,other_kills:0,betrayals:0,suicides:0,
+        hill_offense:0,hill_defense:0 };
       pk[mn]={}; ps_[mn]={}; pg[mn]={}; pw[mn]={};
       tw[mn]={}; tg[mn]={}; mug[mn]={}; muw[mn]={};
     }
@@ -573,6 +574,8 @@ function _jsMaps(games, players) {
       a.weapon_kills += pps.weapon_kills; a.grenade_kills += pps.grenade_kills;
       a.melee_kills  += pps.melee_kills;  a.other_kills   += pps.other_kills;
       a.betrayals += pps.betrayals; a.suicides += pps.suicides;
+      a.hill_offense += (pps.medals && pps.medals['Hill Offense']) || 0;
+      a.hill_defense += (pps.medals && pps.medals['Hill Defense']) || 0;
       pk[mn][p]  = (pk[mn][p]  || 0) + pps.kills;
       ps_[mn][p] = (ps_[mn][p] || 0) + pps.score;
       pg[mn][p]  = (pg[mn][p]  || 0) + 1;
@@ -602,7 +605,8 @@ function _jsMaps(games, players) {
         b_win_pct: Math.round(((muw[mn][mun]||{})[tb]||0)/(gc||1)*1e3)/10 };
     }
     result[mn] = {
-      games: g, avg_mov: Math.round(a.mov_sum/g*10)/10,
+      games: g, total_kills: a.kills,
+      avg_mov: Math.round(a.mov_sum/g*10)/10,
       avg_seconds: Math.round(a.seconds/g),
       avg_kills_per_player:  Math.round(a.kills /g/n*100)/100,
       avg_deaths_per_player: Math.round(a.deaths/g/n*100)/100,
@@ -612,6 +616,10 @@ function _jsMaps(games, players) {
       grenade_pct: Math.round(a.grenade_kills/tk*1e3)/10,
       melee_pct:   Math.round(a.melee_kills  /tk*1e3)/10,
       other_pct:   Math.round(a.other_kills  /tk*1e3)/10,
+      hill_offense:     a.hill_offense,
+      hill_defense:     a.hill_defense,
+      hill_offense_pct: Math.round(a.hill_offense/tk*1e3)/10,
+      hill_defense_pct: Math.round(a.hill_defense/tk*1e3)/10,
       player_avg_kills:pal, player_avg_score:pas, player_win_pct:pwp,
       team_win_pct:twp, mu_breakdown:mub,
       top_player: players.reduce((b,p) => pal[p] > pal[b] ? p : b, players[0]),

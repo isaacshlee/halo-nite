@@ -218,7 +218,7 @@ loadStats().then(data => {
     function pctStackOpts(rawByPlayer) {
       return {
         plugins: {
-          legend: { position:'top', labels:{ color:'#7aacba', font:{family:'Share Tech Mono',size:12}, boxWidth:10 } },
+          legend: { position:'top', labels:{ color:'#9ac8d8', font:{family:'Share Tech Mono',size:12}, boxWidth:10 } },
           tooltip: { callbacks: { label: ctx => {
             const p = allPlayers[ctx.datasetIndex];
             const raw = rawByPlayer[p]?.[ctx.dataIndex]||0;
@@ -235,8 +235,8 @@ loadStats().then(data => {
           },
         },
         scales: {
-          x: { stacked:true, max:100, ticks:{ color:'#3a7080', font:{family:'Share Tech Mono',size:12}, callback:v=>v+'%' }, grid:{color:'rgba(26,58,68,.4)'} },
-          y: { stacked:true, ticks:{ color:'#3a7080', font:{family:'Share Tech Mono',size:12} }, grid:{color:'rgba(26,58,68,.4)'} },
+          x: { stacked:true, max:100, ticks:{ color:'#6090a2', font:{family:'Share Tech Mono',size:12}, callback:v=>v+'%' }, grid:{color:'rgba(26,58,68,.4)'} },
+          y: { stacked:true, ticks:{ color:'#6090a2', font:{family:'Share Tech Mono',size:12} }, grid:{color:'rgba(26,58,68,.4)'} },
         },
       };
     }

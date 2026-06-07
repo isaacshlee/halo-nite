@@ -576,6 +576,8 @@ def build_maps(games, players):
             acc[mn]['other_kills']  += ps['other_kills']
             acc[mn]['betrayals']    += ps['betrayals']
             acc[mn]['suicides']     += ps['suicides']
+            acc[mn]['hill_offense'] += ps['medals'].get('Hill Offense', 0)
+            acc[mn]['hill_defense'] += ps['medals'].get('Hill Defense', 0)
             p_kills[mn][p] += ps['kills']
             p_score[mn][p] += ps['score']
             p_games[mn][p] += 1
@@ -604,6 +606,7 @@ def build_maps(games, players):
             }
         result[mn] = {
             'games':       g,
+            'total_kills': a['kills'],
             'avg_mov':     round(a['mov_sum'] / g, 1),
             'avg_seconds': round(a['seconds'] / g),
             'avg_kills_per_player':  round(a['kills'] / g / n, 2),
@@ -614,6 +617,10 @@ def build_maps(games, players):
             'grenade_pct':   round(a['grenade_kills'] / tk * 100, 1),
             'melee_pct':     round(a['melee_kills'] / tk * 100, 1),
             'other_pct':     round(a['other_kills'] / tk * 100, 1),
+            'hill_offense':     a['hill_offense'],
+            'hill_defense':     a['hill_defense'],
+            'hill_offense_pct': round(a['hill_offense'] / tk * 100, 1),
+            'hill_defense_pct': round(a['hill_defense'] / tk * 100, 1),
             'player_avg_kills': player_avg_kills,
             'player_avg_score': player_avg_score,
             'player_win_pct':   player_win_pct,

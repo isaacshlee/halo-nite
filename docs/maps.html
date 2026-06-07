@@ -51,9 +51,10 @@
   </div>
 
   <div id="sh-charts"></div>
-  <div class="chart-row-2" id="chart-row1"></div>
+  <div class="chart-row-3" id="chart-row1"></div>
   <div class="chart-row-3" id="chart-row2"></div>
-  <div class="chart-row-4" id="chart-row3"></div>
+  <div class="chart-row-3" id="chart-row3"></div>
+  <div class="chart-row-3" id="chart-row4"></div>
 
   <div id="sh-detail"></div>
   <div class="maps-grid" id="maps-grid"></div>
@@ -134,23 +135,27 @@ loadStats().then(data => {
   }
 
   document.getElementById('chart-row1').innerHTML =
-    chartBox('ch-mov','AVG MARGIN OF VICTORY') + chartBox('ch-time','AVG GAME TIME (MIN)');
+    chartBox('ch-mov','AVG MARGIN OF VICTORY') + chartBox('ch-time','AVG GAME TIME (MIN)') + chartBox('ch-k','AVG KILLS / PLAYER');
   document.getElementById('chart-row2').innerHTML =
-    chartBox('ch-k','AVG KILLS / PLAYER') + chartBox('ch-ast','ASSIST %') + chartBox('ch-bs','AVG BETRAY + SUICIDE');
+    chartBox('ch-ast','ASSIST %') + chartBox('ch-bs','AVG BETRAY + SUICIDE') + chartBox('ch-wk','WEAPON KILL %');
   document.getElementById('chart-row3').innerHTML =
-    chartBox('ch-wk','WEAPON KILL %') + chartBox('ch-gk','GRENADE KILL %') +
-    chartBox('ch-mk','MELEE KILL %')  + chartBox('ch-ok','OTHER KILL %');
+    chartBox('ch-gk','GRENADE KILL %') + chartBox('ch-mk','MELEE KILL %') + chartBox('ch-ok','OTHER KILL %');
+  document.getElementById('chart-row4').innerHTML =
+    chartBox('ch-hof','HILL OFFENSE KILL %') + chartBox('ch-hdf','HILL DEFENSE KILL %') + chartBox('ch-hrat','HILL OFF / DEF RATIO');
 
   const chartSpecs = [
-    ['ch-mov',  mapEntries.map(([,m])=>m.avg_mov),                         ''],
-    ['ch-time', mapEntries.map(([,m])=>+(m.avg_seconds/60).toFixed(1)),     ''],
-    ['ch-k',    mapEntries.map(([,m])=>m.avg_kills_per_player),             ''],
-    ['ch-ast',  mapEntries.map(([,m])=>m.avg_assists_pct),                  '%'],
-    ['ch-bs',   mapEntries.map(([,m])=>m.avg_betray_suicide),               ''],
-    ['ch-wk',   mapEntries.map(([,m])=>m.weapon_pct),                       '%'],
-    ['ch-gk',   mapEntries.map(([,m])=>m.grenade_pct),                      '%'],
-    ['ch-mk',   mapEntries.map(([,m])=>m.melee_pct),                        '%'],
-    ['ch-ok',   mapEntries.map(([,m])=>m.other_pct),                        '%'],
+    ['ch-mov',  mapEntries.map(([,m])=>m.avg_mov),                                                            ''],
+    ['ch-time', mapEntries.map(([,m])=>+(m.avg_seconds/60).toFixed(1)),                                        ''],
+    ['ch-k',    mapEntries.map(([,m])=>m.avg_kills_per_player),                                                ''],
+    ['ch-ast',  mapEntries.map(([,m])=>m.avg_assists_pct),                                                     '%'],
+    ['ch-bs',   mapEntries.map(([,m])=>m.avg_betray_suicide),                                                  ''],
+    ['ch-wk',   mapEntries.map(([,m])=>m.weapon_pct),                                                         '%'],
+    ['ch-gk',   mapEntries.map(([,m])=>m.grenade_pct),                                                        '%'],
+    ['ch-mk',   mapEntries.map(([,m])=>m.melee_pct),                                                          '%'],
+    ['ch-ok',   mapEntries.map(([,m])=>m.other_pct),                                                          '%'],
+    ['ch-hof',  mapEntries.map(([,m])=>m.hill_offense_pct||0),                                                '%'],
+    ['ch-hdf',  mapEntries.map(([,m])=>m.hill_defense_pct||0),                                                '%'],
+    ['ch-hrat', mapEntries.map(([,m])=>+(((m.hill_offense||0)/((m.hill_defense||0)||1)).toFixed(2))),          ''],
   ];
 
   // Defer chart creation one frame so the DOM is fully laid out before measuring widths.
@@ -175,8 +180,8 @@ loadStats().then(data => {
           indexAxis: 'y',
           plugins: { legend: { display: false }, tooltip: CHART_DEFAULTS.plugins.tooltip },
           scales: {
-            y: { ticks: { color:'#7aacba', font:{ family:'Share Tech Mono', size:12 }, autoSkip:false }, grid:{ color:'rgba(26,58,68,.35)' } },
-            x: { ticks: { color:'#3a7080', font:{ family:'Share Tech Mono', size:12 }, callback: v => v+(suf||'') }, grid:{ color:'rgba(26,58,68,.35)' } },
+            y: { ticks: { color:'#9ac8d8', font:{ family:'Share Tech Mono', size:12 }, autoSkip:false }, grid:{ color:'rgba(26,58,68,.35)' } },
+            x: { ticks: { color:'#6090a2', font:{ family:'Share Tech Mono', size:12 }, callback: v => v+(suf||'') }, grid:{ color:'rgba(26,58,68,.35)' } },
           },
         },
       });
@@ -212,29 +217,28 @@ function showMap(mn) {
 
   const detailEl = document.getElementById('map-detail');
 
+  const hillOff = m.hill_offense || 0;
+  const hillDef = m.hill_defense || 0;
+  const nonZone = Math.max(0, (m.total_kills || 0) - hillOff - hillDef);
+
+  const offDefRatio = hillDef > 0 ? (hillOff/hillDef).toFixed(2) : (hillOff > 0 ? '∞' : '—');
+
   detailEl.innerHTML = `
     <div class="map-detail">
       <div class="map-detail-name">${mn}</div>
       <div class="cards-grid" style="margin-bottom:16px">
         ${[
           {v:m.games,               l:'GAMES PLAYED'},
+          {v:m.avg_mov,             l:'AVG MOV'},
+          {v:mins+'m',              l:'AVG GAME TIME'},
           {v:m.avg_kills_per_player,l:'AVG KILLS/PLAYER'},
           {v:m.avg_assists_pct+'%', l:'ASSIST %'},
-          {v:mins+'m',              l:'AVG GAME TIME'},
+          {v:offDefRatio,           l:'OFF/DEF KILL RATIO'},
           {v:m.avg_betray_suicide,  l:'AVG BTR+SUI'},
-          {v:m.avg_mov,             l:'AVG MOV'},
-        ].map(s=>`<div class="stat-card"><div class="num">${s.v}</div><div class="lbl">${s.l}</div></div>`).join('')}
-      </div>
-      <div class="cards-grid" style="margin-bottom:16px">
-        ${[
-          {v:m.weapon_pct+'%', l:'WEAPON KILL %'},
-          {v:m.grenade_pct+'%',l:'GRENADE KILL %'},
-          {v:m.melee_pct+'%',  l:'MELEE KILL %'},
-          {v:m.other_pct+'%',  l:'OTHER KILL %'},
         ].map(s=>`<div class="stat-card"><div class="num">${s.v}</div><div class="lbl">${s.l}</div></div>`).join('')}
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px">
         <div>
           <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>AVG KILLS ON MAP</span></div>
           ${sortedP.map(p=>{ const avg=m.player_avg_kills[p]||0; const c=pc(p,data); const pct=Math.round(avg/maxKills*100);
@@ -267,11 +271,14 @@ function showMap(mn) {
           <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>KILL STYLE</span></div>
           <canvas id="detail-ks" style="max-height:200px"></canvas>
         </div>
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>KILL LOCATION</span></div>
+          <canvas id="detail-kl" style="max-height:200px"></canvas>
+        </div>
       </div>
     </div>`;
 
   // Kill styles pie for map detail
-  const tot = [m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct].reduce((s,v)=>s+v,0)||1;
   makePie('detail-ks',
     ['Weapon','Grenade','Melee','Other'].map((l,i)=>{
       const vals=[m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct];
@@ -279,6 +286,18 @@ function showMap(mn) {
     }),
     [m.weapon_pct,m.grenade_pct,m.melee_pct,m.other_pct],
     ['#4488ff','#ff6a00','#44dd88','#c088ff']
+  );
+
+  // Kill location pie for map detail
+  const klTotal = hillOff + hillDef + nonZone || 1;
+  makePie('detail-kl',
+    [
+      `Hill Offense: ${hillOff} (${(hillOff/klTotal*100).toFixed(1)}%)`,
+      `Hill Defense: ${hillDef} (${(hillDef/klTotal*100).toFixed(1)}%)`,
+      `Non-Zone: ${nonZone} (${(nonZone/klTotal*100).toFixed(1)}%)`,
+    ],
+    [hillOff, hillDef, nonZone],
+    ['#ff9944','#44aaff','#888888']
   );
 }
 </script>
