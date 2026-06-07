@@ -153,7 +153,7 @@ function buildExpandTable(g, data, isLifetime) {
     const tplayers = teamGroups[tname];
     const tc = teamColor(tname, data);
     const tScore = tplayers.reduce((s,p)=>s+(g.players[p].score||0),0);
-    const tQike  = tplayers.reduce((s,p)=>s+(g.players[p].qike||0),0);
+    const tQike  = tplayers.reduce((s,p)=>s+(g.players[p].qike||0),0) / tplayers.length;
     const won = tname === wt;
 
     tplayers.forEach((p, pi) => {
