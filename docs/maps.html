@@ -320,9 +320,9 @@ function showMap(mn) {
           {v:m.avg_assists_pct+'%', l:'ASSIST %'},
           {v:offDefRatio,           l:'OFF/DEF RATIO'},
           {v:m.avg_betray_suicide,  l:'AVG BTR+SUI'},
-        ].map(s=>`<div style="background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--teal-dim);padding:6px 8px;text-align:center">
-          <div style="font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--teal);text-shadow:0 0 8px var(--teal-glow);line-height:1">${s.v}</div>
-          <div style="font-size:.55rem;letter-spacing:.1em;color:var(--text-dim);margin-top:3px">${s.l}</div>
+        ].map(s=>`<div style="background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--teal-dim);padding:10px 8px;text-align:center">
+          <div style="font-family:var(--font-head);font-size:1.25rem;font-weight:700;color:var(--teal);text-shadow:0 0 8px var(--teal-glow);line-height:1">${s.v}</div>
+          <div style="font-size:.6rem;letter-spacing:.1em;color:var(--text-dim);margin-top:4px">${s.l}</div>
         </div>`).join('')}
       </div>
 
