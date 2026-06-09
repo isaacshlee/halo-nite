@@ -13,7 +13,7 @@
 .rec-group h3.neg { color:#f87171;border-bottom-color:#f8717144; }
 .rec-item { padding:10px 14px;border-bottom:1px solid var(--border2); }
 .rec-item:last-child { border-bottom:none; }
-.rec-label { font-size:.72rem;letter-spacing:.2em;color:var(--text-dim);font-family:var(--font-head);font-weight:600;margin-bottom:4px; }
+.rec-label { font-size:.72rem;letter-spacing:.2em;color:var(--text-mid);font-family:var(--font-head);font-weight:600;margin-bottom:4px; }
 .rec-instance { display:flex;align-items:center;gap:10px;margin-top:5px; }
 .rec-instance:first-child { margin-top:0; }
 .rec-val { font-family:var(--font-head);font-size:1.5rem;font-weight:700;line-height:1;min-width:48px;text-align:right;flex-shrink:0; }
@@ -68,25 +68,29 @@ renderNav('records.html', null);
 
 // PB categories — defined once at module scope
 const PB_CATS_POS = [
-  { key:'most_points',       label:'Most Points',           field:'score',             minimize:false },
-  { key:'most_kills',        label:'Most Kills',            field:'kills',             minimize:false },
-  { key:'most_assists',      label:'Most Assists',          field:'assists',           minimize:false },
-  { key:'fewest_deaths',     label:'Fewest Deaths',         field:'deaths',            minimize:true  },
-  { key:'most_weapon_kills', label:'Most Weapon Kills',     field:'weapon_kills',      minimize:false },
-  { key:'most_grenade_kills',label:'Most Grenade Kills',    field:'grenade_kills',     minimize:false },
-  { key:'most_melee_kills',  label:'Most Melee Kills',      field:'melee_kills',       minimize:false },
-  { key:'most_other_kills',  label:'Most Other Kills',      field:'other_kills',       minimize:false },
-  { key:'greatest_spread',   label:'Greatest K/D Spread',   field:'kd_spread',         minimize:false },
-  { key:'longest_spree',     label:'Longest Killing Spree', field:'most_kills_in_row', minimize:false },
+  { key:'most_points',            label:'Most Points',              field:'score',             minimize:false },
+  { key:'most_kills',             label:'Most Kills',               field:'kills',             minimize:false },
+  { key:'most_assists',           label:'Most Assists',             field:'assists',           minimize:false },
+  { key:'fewest_deaths',          label:'Fewest Deaths',            field:'deaths',            minimize:true  },
+  { key:'most_weapon_kills',      label:'Most Weapon Kills',        field:'weapon_kills',      minimize:false },
+  { key:'most_grenade_kills',     label:'Most Grenade Kills',       field:'grenade_kills',     minimize:false },
+  { key:'most_melee_kills',       label:'Most Melee Kills',         field:'melee_kills',       minimize:false },
+  { key:'most_other_kills',       label:'Most Other Kills',         field:'other_kills',       minimize:false },
+  { key:'greatest_spread',        label:'Greatest K/D Spread',      field:'kd_spread',         minimize:false },
+  { key:'longest_spree',          label:'Longest Killing Spree',    field:'most_kills_in_row', minimize:false },
+  { key:'longest_win_streak',     label:'Longest Win Streak',       field:'_win_streak',       minimize:false, streak:true },
+  { key:'longest_set_win_streak', label:'Longest Set Win Streak',   field:'_set_win_streak',   minimize:false, streak:true },
 ];
 const PB_CATS_NEG = [
-  { key:'fewest_points',  label:'Fewest Points',  field:'score',     minimize:true  },
-  { key:'fewest_kills',   label:'Fewest Kills',   field:'kills',     minimize:true  },
-  { key:'most_deaths',    label:'Most Deaths',    field:'deaths',    minimize:false },
-  { key:'lowest_spread',  label:'Lowest K/D Spread', field:'kd_spread', minimize:true },
-  { key:'most_betrayals', label:'Most Betrayals', field:'betrayals', minimize:false },
-  { key:'most_suicides',  label:'Most Suicides',  field:'suicides',  minimize:false },
-  { key:'most_betray_sui',label:'Most Betrayals+Suicides', field:'_betray_sui', minimize:false },
+  { key:'fewest_points',           label:'Fewest Points',               field:'score',        minimize:true  },
+  { key:'fewest_kills',            label:'Fewest Kills',                field:'kills',        minimize:true  },
+  { key:'most_deaths',             label:'Most Deaths',                 field:'deaths',       minimize:false },
+  { key:'lowest_spread',           label:'Lowest K/D Spread',           field:'kd_spread',    minimize:true  },
+  { key:'most_betrayals',          label:'Most Betrayals',              field:'betrayals',    minimize:false },
+  { key:'most_suicides',           label:'Most Suicides',               field:'suicides',     minimize:false },
+  { key:'most_betray_sui',         label:'Most Betrayals+Suicides',     field:'_betray_sui',  minimize:false },
+  { key:'longest_loss_streak',     label:'Longest Loss Streak',         field:'_loss_streak', minimize:false, streak:true },
+  { key:'longest_set_loss_streak', label:'Longest Set Loss Streak',     field:'_set_loss_streak', minimize:false, streak:true },
 ];
 const ALL_PB_CATS = [...PB_CATS_POS, ...PB_CATS_NEG];
 
@@ -136,12 +140,14 @@ loadStats().then(data => {
     fewest_deaths:'FEWEST DEATHS', most_weapon_kills:'MOST WEAPON KILLS',
     most_grenade_kills:'MOST GRENADE KILLS', most_melee_kills:'MOST MELEE KILLS',
     most_other_kills:'MOST OTHER KILLS', greatest_spread:'GREATEST K/D SPREAD', longest_spree:'LONGEST KILL SPREE',
+    longest_win_streak:'LONGEST WIN STREAK', longest_set_win_streak:'LONGEST SET WIN STREAK',
   };
   const pnMap = {
     fewest_points:'FEWEST POINTS', fewest_kills:'FEWEST KILLS',
     most_deaths:'MOST DEATHS', lowest_spread:'LOWEST K/D SPREAD',
     ...(combineSui ? {most_betray_suicide:'MOST BETRAY+SUICIDES'}
                    : {most_betrayals:'MOST BETRAYALS', most_suicides:'MOST SUICIDES'}),
+    longest_loss_streak:'LONGEST LOSS STREAK', longest_set_loss_streak:'LONGEST SET LOSS STREAK',
   };
 
   document.getElementById('pp-recs').innerHTML = Object.entries(ppMap).map(([k,l])=>recItem(l,records.player_positive[k],'#4ade80')).join('');
@@ -212,8 +218,34 @@ function renderPB(data, sd, players, isLifetime, combineSui) {
   // For each (category, player): find personal best within filtered games
   const rows = [];
 
-  catsToShow.forEach(({ key, label, field, minimize }) => {
+  catsToShow.forEach(({ key, label, field, minimize, streak }) => {
     plrsToShow.forEach(p => {
+      if (streak) {
+        // Compute from all games in chronological order (filters don't apply to streaks)
+        const fieldMap = { '_win_streak':'win_streak', '_loss_streak':'loss_streak',
+                           '_set_win_streak':'set_win_streak', '_set_loss_streak':'set_loss_streak' };
+        const sk = fieldMap[field];
+        let gw=0,gl=0,sw=0,sl=0;
+        let bestVal=0, bestGames=[];
+        sd.games.forEach(g => {
+          const ps = g.players[p]; if (!ps) return;
+          const won = ps.team === g.winning_team;
+          if (won) { gw++; gl=0; } else { gl++; gw=0; }
+          if (g.set_decider && g.set_winner) {
+            if (ps.team===g.set_winner) { sw++; sl=0; } else { sl++; sw=0; }
+          }
+          const cur = {win_streak:gw,loss_streak:gl,set_win_streak:sw,set_loss_streak:sl}[sk];
+          if (cur > bestVal) { bestVal=cur; bestGames=[g]; }
+          else if (cur===bestVal && cur>0) bestGames.push(g);
+        });
+        if (!bestVal) return;
+        bestGames.forEach(g => {
+          const gn = isLifetime ? (g.game_num_lifetime||g.game_num_season) : g.game_num_season;
+          rows.push({ label, player:p, value:bestVal, gameNum:gn, nite:g.halonite_num, map:g.map, matchup:g.matchup });
+        });
+        return;
+      }
+
       let bestVal = minimize ? Infinity : -Infinity;
       let bestGames = [];
 

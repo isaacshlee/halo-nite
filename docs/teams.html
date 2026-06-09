@@ -180,6 +180,18 @@ loadStats().then(data => {
           </div>`;
         }).join('')}
       </div>
+
+      <!-- Kill location pies per team -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        ${[ta,tb].map(tn => {
+          const tc = teamColor(tn, data);
+          const uid4 = uid+tn.replace(/[^a-z]/gi,'')+'kl';
+          return `<div class="box" style="padding:10px;border-top:2px solid ${tc}">
+            <div style="font-family:var(--font-head);font-size:.6rem;color:${tc};letter-spacing:.15em;margin-bottom:6px">${tn} KILL LOCATION</div>
+            <canvas id="kl-${uid4}" style="max-height:150px"></canvas>
+          </div>`;
+        }).join('')}
+      </div>
     </div>`;
   }).join('');
 
@@ -288,6 +300,18 @@ loadStats().then(data => {
       teamAssists[tn].solo     += Math.max(0,kills-assists);
     }));
 
+    // Kill location pies
+    const teamHillLoc = { [ta]:{ho:0,hd:0,total:0}, [tb]:{ho:0,hd:0,total:0} };
+    muGames.forEach(g => players.forEach(p => {
+      const t = g.players[p]?.team;
+      if (!t || !teamHillLoc[t]) return;
+      const ps = g.players[p];
+      const med = ps.medals || {};
+      teamHillLoc[t].ho    += med['Hill Offense'] || 0;
+      teamHillLoc[t].hd    += med['Hill Defense'] || 0;
+      teamHillLoc[t].total += ps.kills || 0;
+    }));
+
     [ta,tb].forEach(tn => {
       const st = teamStyles[tn];
       const tc = teamColor(tn,data);
@@ -304,6 +328,15 @@ loadStats().then(data => {
       makePie(`apt-${uid3}`,
         [`Assisted (${(as.assisted/atot*100).toFixed(0)}%)`,`Solo (${(as.solo/atot*100).toFixed(0)}%)`],
         [as.assisted,as.solo],[tc,'#888888']
+      );
+      const hl = teamHillLoc[tn];
+      const uid4 = uid2+'kl';
+      const nonZone = Math.max(0, hl.total - hl.ho - hl.hd);
+      const kltot = hl.ho + hl.hd + nonZone || 1;
+      makePie(`kl-${uid4}`,
+        [`Hill Offense (${(hl.ho/kltot*100).toFixed(0)}%)`,`Hill Defense (${(hl.hd/kltot*100).toFixed(0)}%)`,`Non-Zone (${(nonZone/kltot*100).toFixed(0)}%)`],
+        [hl.ho, hl.hd, nonZone],
+        ['#ffaa33','#33aaff','#888888']
       );
     });
   });

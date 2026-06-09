@@ -66,6 +66,110 @@
 <script>
 renderNav('maps.html', null);
 let globalData = null;
+let _mapEntries = null;
+let _mapSortState = null; // null or {type:'player'|'team', key:string}
+
+function _gradC(val, mn, mx) {
+  if (mn === mx) return '#9ac8d8';
+  const t = Math.max(0, Math.min(1, (val-mn)/(mx-mn)));
+  const r = Math.round(0xf8 + t*(0x4a-0xf8));
+  const g = Math.round(0x71 + t*(0xde-0x71));
+  const b = Math.round(0x71 + t*(0x80-0x71));
+  return `rgb(${r},${g},${b})`;
+}
+
+function sortByMapCol(type, key) {
+  if (_mapSortState && _mapSortState.type===type && _mapSortState.key===key) {
+    _mapSortState = null;
+  } else {
+    _mapSortState = {type, key};
+  }
+  renderMapTableBodies();
+}
+
+function getSortedMapEntries() {
+  if (!_mapSortState || !_mapEntries) return _mapEntries;
+  const {type, key} = _mapSortState;
+  const mn2 = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
+  return [..._mapEntries].sort((a,b) => {
+    let av=0, bv=0;
+    if (type==='player') {
+      av = a[1].player_win_pct[key]||0;
+      bv = b[1].player_win_pct[key]||0;
+    } else {
+      for (const muName of mn2) {
+        const muA=(a[1].mu_breakdown||{})[muName], muB=(b[1].mu_breakdown||{})[muName];
+        const [ta,tb]=muName.split(' vs ');
+        if (ta===key) { if(muA) av=muA.a_win_pct; if(muB) bv=muB.a_win_pct; break; }
+        if (tb===key) { if(muA) av=muA.b_win_pct; if(muB) bv=muB.b_win_pct; break; }
+      }
+    }
+    return bv - av;
+  });
+}
+
+function renderMapTableBodies() {
+  const data = globalData;
+  if (!data || !_mapEntries) return;
+  const sd = getSeasonData(data);
+  const { players } = data;
+  const sortedPlayers = [...players].sort();
+  const mu_pairs = [['Blue','Red'],['Pink','Green'],['Gold','Brown']];
+  const mu_names = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
+  const entries = getSortedMapEntries();
+
+  // Per-player gradient range
+  const plrRange = {};
+  sortedPlayers.forEach(p => {
+    const vals = _mapEntries.map(([,m]) => m.player_win_pct[p]||0);
+    plrRange[p] = [Math.min(...vals), Math.max(...vals)];
+  });
+
+  // Per-team gradient range (across all maps, ignoring sort)
+  const teamRange = {};
+  mu_pairs.forEach(([a,b],i) => {
+    const muName = mu_names[i];
+    const aVals=[], bVals=[];
+    _mapEntries.forEach(([,m]) => {
+      const mu=(m.mu_breakdown||{})[muName];
+      if (mu) { aVals.push(mu.a_win_pct); bVals.push(mu.b_win_pct); }
+    });
+    if (aVals.length) teamRange[a]=[Math.min(...aVals),Math.max(...aVals)];
+    if (bVals.length) teamRange[b]=[Math.min(...bVals),Math.max(...bVals)];
+  });
+
+  document.getElementById('tbl1-body').innerHTML = entries.map(([mn,m])=>`<tr>
+    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
+    <td class="r dim">${m.games}</td>
+    ${sortedPlayers.map(p=>{
+      const w=m.player_win_pct[p]||0;
+      const [lo,hi]=plrRange[p];
+      return `<td class="r" style="color:${_gradC(w,lo,hi)}">${w}%</td>`;
+    }).join('')}
+  </tr>`).join('');
+
+  document.getElementById('tbl2-body').innerHTML = entries.map(([mn,m])=>`<tr>
+    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
+    ${mu_pairs.map(([a,b],i)=>{
+      const muName=mu_names[i];
+      const mu=(m.mu_breakdown||{})[muName];
+      if (!mu) return `<td class="r dim">—</td><td class="r dim">—</td><td class="r dim">—</td>`;
+      const aw=mu.a_win_pct, bw=mu.b_win_pct;
+      const [alo,ahi]=teamRange[a]||[aw,aw];
+      const [blo,bhi]=teamRange[b]||[bw,bw];
+      return `<td class="r dim">${mu.games}</td>
+              <td class="r" style="color:${_gradC(aw,alo,ahi)}">${aw}%</td>
+              <td class="r" style="color:${_gradC(bw,blo,bhi)}">${bw}%</td>`;
+    }).join('')}
+  </tr>`).join('');
+
+  // Update sort indicator on headers
+  document.querySelectorAll('[data-sort-type]').forEach(th => {
+    const active = _mapSortState && th.dataset.sortType===_mapSortState.type && th.dataset.sortKey===_mapSortState.key;
+    th.style.textDecoration = active ? 'underline' : '';
+    th.style.opacity = active ? '1' : '';
+  });
+}
 
 loadStats().then(data => {
   globalData = data;
@@ -76,7 +180,8 @@ loadStats().then(data => {
   const sd = getSeasonData(data);
   const { players } = data;
   const { maps, matchups } = sd;
-  const mapEntries = Object.entries(maps); // alphabetical
+  _mapEntries = Object.entries(maps); // alphabetical
+  const mapEntries = _mapEntries;
   const mapNames = mapEntries.map(([n])=>n);
   const sortedPlayers = [...players].sort();
 
@@ -88,42 +193,22 @@ loadStats().then(data => {
   const mu_pairs = [['Blue','Red'],['Pink','Green'],['Gold','Brown']];
   const mu_names = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
 
-  // ── Table 1: Player win % ──
+  // ── Table headers (static, with sort click handlers) ──
   document.getElementById('tbl1-hdr').innerHTML = `<tr>
     <th>MAP</th><th class="r">G</th>
-    ${sortedPlayers.map(p=>`<th class="r" style="color:${pc(p,data)}">${dn(p,data)} W%</th>`).join('')}
+    ${sortedPlayers.map(p=>`<th class="r" style="color:${pc(p,data)};cursor:pointer" data-sort-type="player" data-sort-key="${p}" onclick="sortByMapCol('player','${p}')">${dn(p,data)} W%</th>`).join('')}
   </tr>`;
-  document.getElementById('tbl1-body').innerHTML = mapEntries.map(([mn,m])=>`<tr>
-    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
-    <td class="r dim">${m.games}</td>
-    ${sortedPlayers.map(p=>{
-      const w=m.player_win_pct[p]||0;
-      return `<td class="r" style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</td>`;
-    }).join('')}
-  </tr>`).join('');
-
-  // ── Table 2: Matchup win % ──
   document.getElementById('tbl2-hdr').innerHTML = `<tr>
     <th>MAP</th>
     ${mu_pairs.map(([a,b],i)=>{
-      const ca=teamColor(a,data),cb=teamColor(b,data);
+      const ca=teamColor(a,data), cb=teamColor(b,data);
       return `<th class="r dim" style="font-size:.55rem">G</th>
-              <th class="r" style="color:${ca}">${a}%</th>
-              <th class="r" style="color:${cb}">${b}%</th>`;
+              <th class="r" style="color:${ca};cursor:pointer" data-sort-type="team" data-sort-key="${a}" onclick="sortByMapCol('team','${a}')">${a}%</th>
+              <th class="r" style="color:${cb};cursor:pointer" data-sort-type="team" data-sort-key="${b}" onclick="sortByMapCol('team','${b}')">${b}%</th>`;
     }).join('')}
   </tr>`;
-  document.getElementById('tbl2-body').innerHTML = mapEntries.map(([mn,m])=>`<tr>
-    <td style="font-family:var(--font-head);font-weight:600">${mn}</td>
-    ${mu_pairs.map(([a,b],i)=>{
-      const muName = mu_names[i];
-      const mu = (m.mu_breakdown||{})[muName];
-      if (!mu) return `<td class="r dim">—</td><td class="r dim">—</td><td class="r dim">—</td>`;
-      const aw=mu.a_win_pct, bw=mu.b_win_pct;
-      return `<td class="r dim">${mu.games}</td>
-              <td class="r" style="color:${aw>=50?'#4ade80':'#f87171'}">${aw}%</td>
-              <td class="r" style="color:${bw>=50?'#4ade80':'#f87171'}">${bw}%</td>`;
-    }).join('')}
-  </tr>`).join('');
+
+  renderMapTableBodies();
 
   // ── Charts ──
   const barC = i => `hsl(${185+i*7},80%,${45+(i%3)*7}%)`;

@@ -694,11 +694,16 @@ function _jsRecords(games, players, combineSuicides) {
 
   const pp = { most_points:mk(0),most_kills:mk(0),most_assists:mk(0),fewest_deaths:mk(1),
     most_weapon_kills:mk(0),most_grenade_kills:mk(0),most_melee_kills:mk(0),most_other_kills:mk(0),
-    greatest_spread:mk(0),longest_spree:mk(0) };
+    greatest_spread:mk(0),longest_spree:mk(0),
+    longest_win_streak:mk(0),longest_set_win_streak:mk(0) };
   const pn = { fewest_points:mk(1),fewest_kills:mk(1),most_deaths:mk(0),lowest_spread:mk(1),
-    most_betrayals:mk(0),most_suicides:mk(0),most_betray_suicide:mk(0) };
+    most_betrayals:mk(0),most_suicides:mk(0),most_betray_suicide:mk(0),
+    longest_loss_streak:mk(0),longest_set_loss_streak:mk(0) };
   const tp = { most_kills:mk(0),most_assists:mk(0),fewest_deaths:mk(1),greatest_spread:mk(0) };
   const tn = { fewest_points:mk(1),fewest_kills:mk(1),most_deaths:mk(0),lowest_spread:mk(1) };
+
+  const sgw={}, sgl={}, ssw={}, ssl={};
+  for (const p of players) { sgw[p]=0; sgl[p]=0; ssw[p]=0; ssl[p]=0; }
 
   for (const g of games) {
     const ib = { game_num_season:g.game_num_season, halonite_num:g.halonite_num,
@@ -723,6 +728,16 @@ function _jsRecords(games, players, combineSuicides) {
       chk(pn.lowest_spread, ps.kd_spread, info, 1);
       if (combineSuicides) chk(pn.most_betray_suicide, sb, info, 0);
       else { chk(pn.most_betrayals, ps.betrayals, info, 0); chk(pn.most_suicides, ps.suicides, info, 0); }
+
+      const won = ps.team === g.winning_team;
+      if (won) { sgw[p]++; sgl[p]=0; } else { sgl[p]++; sgw[p]=0; }
+      chk(pp.longest_win_streak,  sgw[p], info, 0);
+      chk(pn.longest_loss_streak, sgl[p], info, 0);
+      if (g.set_decider && g.set_winner) {
+        if (ps.team===g.set_winner) { ssw[p]++; ssl[p]=0; } else { ssl[p]++; ssw[p]=0; }
+        chk(pp.longest_set_win_streak,  ssw[p], info, 0);
+        chk(pn.longest_set_loss_streak, ssl[p], info, 0);
+      }
     }
     for (const [tn_, tm] of Object.entries(g.teams)) {
       const spread = tm.kills - tm.deaths;
@@ -746,8 +761,16 @@ function _jsPersonalBests(games, players) {
   const cats = { most_kills:{f:'kills',min:0}, most_points:{f:'score',min:0},
     most_assists:{f:'assists',min:0}, best_kdr:{f:'kdr',min:0},
     best_spread:{f:'kd_spread',min:0}, fewest_deaths:{f:'deaths',min:1} };
+  const streakKeys = ['longest_win_streak','longest_loss_streak','longest_set_win_streak','longest_set_loss_streak'];
   const bests = {};
-  for (const p of players) { bests[p] = {}; for (const k of Object.keys(cats)) bests[p][k]={val:null,instances:[]}; }
+  for (const p of players) {
+    bests[p] = {};
+    for (const k of Object.keys(cats)) bests[p][k]={val:null,instances:[]};
+    for (const k of streakKeys) bests[p][k]={val:null,instances:[]};
+  }
+  const sgw={}, sgl={}, ssw={}, ssl={};
+  for (const p of players) { sgw[p]=0; sgl[p]=0; ssw[p]=0; ssl[p]=0; }
+
   for (const g of games) {
     for (const p of players) {
       const ps = g.players[p];
@@ -761,6 +784,18 @@ function _jsPersonalBests(games, players) {
         if (b.val===null) { b.val=val; b.instances=[entry]; }
         else if (min ? val<b.val : val>b.val) { b.val=val; b.instances=[entry]; }
         else if (val===b.val) b.instances.push(entry);
+      }
+      const won = ps.team === g.winning_team;
+      if (won) { sgw[p]++; sgl[p]=0; } else { sgl[p]++; sgw[p]=0; }
+      if (g.set_decider && g.set_winner) {
+        if (ps.team===g.set_winner) { ssw[p]++; ssl[p]=0; } else { ssl[p]++; ssw[p]=0; }
+      }
+      for (const [cat, sv] of [['longest_win_streak',sgw[p]],['longest_loss_streak',sgl[p]],
+                                 ['longest_set_win_streak',ssw[p]],['longest_set_loss_streak',ssl[p]]]) {
+        if (!sv) continue;
+        const b = bests[p][cat], entry = {...info, value:sv};
+        if (b.val===null || sv>b.val) { b.val=sv; b.instances=[entry]; }
+        else if (sv===b.val) b.instances.push(entry);
       }
     }
   }

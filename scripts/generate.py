@@ -741,6 +741,7 @@ def build_records(games, players, season_num):
         'most_points','most_kills','most_assists','fewest_deaths',
         'most_weapon_kills','most_grenade_kills','most_melee_kills','most_other_kills',
         'greatest_spread','longest_spree',
+        'longest_win_streak','longest_set_win_streak',
     ]}
     pp['fewest_deaths'] = make_tracker(minimize=True)
 
@@ -754,7 +755,14 @@ def build_records(games, players, season_num):
     pn['most_deaths']    = make_tracker(minimize=False)
     pn['most_betrayals'] = make_tracker(minimize=False)
     pn['most_suicides']  = make_tracker(minimize=False)
-    pn['most_betray_suicide'] = make_tracker(minimize=False)
+    pn['most_betray_suicide']   = make_tracker(minimize=False)
+    pn['longest_loss_streak']    = make_tracker(minimize=False)
+    pn['longest_set_loss_streak']= make_tracker(minimize=False)
+
+    streak_gw = {p: 0 for p in players}
+    streak_gl = {p: 0 for p in players}
+    streak_sw = {p: 0 for p in players}
+    streak_sl = {p: 0 for p in players}
 
     tp = {k: make_tracker() for k in ['most_kills','most_assists','fewest_deaths','greatest_spread']}
     tp['fewest_deaths'] = make_tracker(minimize=True)
@@ -799,6 +807,22 @@ def build_records(games, players, season_num):
                 check(pn['most_betrayals'], ps['betrayals'], info)
                 check(pn['most_suicides'],  ps['suicides'],  info)
 
+            won = ps['team'] == g['winning_team']
+            if won:
+                streak_gw[p] += 1; streak_gl[p] = 0
+            else:
+                streak_gl[p] += 1; streak_gw[p] = 0
+            check(pp['longest_win_streak'],  streak_gw[p], info)
+            check(pn['longest_loss_streak'], streak_gl[p], info)
+            sw_team = g.get('set_winner', '')
+            if g.get('set_decider') and sw_team:
+                if ps['team'] == sw_team:
+                    streak_sw[p] += 1; streak_sl[p] = 0
+                else:
+                    streak_sl[p] += 1; streak_sw[p] = 0
+                check(pp['longest_set_win_streak'],  streak_sw[p], info)
+                check(pn['longest_set_loss_streak'], streak_sl[p], info)
+
         for team_name, tm in g['teams'].items():
             spread = tm['kills'] - tm['deaths']
             tinfo = {**info_base, 'team': team_name}
@@ -834,7 +858,14 @@ def build_personal_bests(games, players):
         'best_spread': ('kd_spread', False),
         'fewest_deaths': ('deaths', True),
     }
-    bests = {p: {k: {'val': None, 'instances': []} for k in categories} for p in players}
+    streak_cats = ['longest_win_streak','longest_loss_streak','longest_set_win_streak','longest_set_loss_streak']
+    all_keys = list(categories.keys()) + streak_cats
+    bests = {p: {k: {'val': None, 'instances': []} for k in all_keys} for p in players}
+
+    sgw = {p: 0 for p in players}
+    sgl = {p: 0 for p in players}
+    ssw = {p: 0 for p in players}
+    ssl = {p: 0 for p in players}
 
     for g in games:
         for p in players:
@@ -859,6 +890,27 @@ def build_personal_bests(games, players):
                     best['instances'] = [{**info, 'value': val}]
                 elif val == best['val']:
                     best['instances'].append({**info, 'value': val})
+
+            won = ps['team'] == g['winning_team']
+            if won: sgw[p] += 1; sgl[p] = 0
+            else:   sgl[p] += 1; sgw[p] = 0
+            if g.get('set_decider') and g.get('set_winner'):
+                if ps['team'] == g['set_winner']: ssw[p] += 1; ssl[p] = 0
+                else:                              ssl[p] += 1; ssw[p] = 0
+
+            for cat, streak_val in [
+                ('longest_win_streak',      sgw[p]),
+                ('longest_loss_streak',     sgl[p]),
+                ('longest_set_win_streak',  ssw[p]),
+                ('longest_set_loss_streak', ssl[p]),
+            ]:
+                if streak_val == 0: continue
+                best = bests[p][cat]
+                entry = {**info, 'value': streak_val}
+                if best['val'] is None or streak_val > best['val']:
+                    best['val'] = streak_val; best['instances'] = [entry]
+                elif streak_val == best['val']:
+                    best['instances'].append(entry)
 
     return bests
 

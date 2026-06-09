@@ -19,12 +19,12 @@
 .game-log-tbl th { font-family:var(--font-head);font-size:.68rem;font-weight:600;letter-spacing:.15em;color:var(--teal);padding:5px 8px;border-bottom:1px solid var(--border); }
 .game-log-tbl td { padding:5px 8px;border-bottom:1px solid var(--border2); }
 .game-log-tbl tr:last-child td { border-bottom:none; }
-.summary-tbl { width:100%;border-collapse:collapse;font-size:.82rem; }
-.summary-tbl th { font-family:var(--font-head);font-size:.68rem;font-weight:600;letter-spacing:.15em;color:var(--teal);padding:5px 8px;border-bottom:1px solid var(--border);text-align:right; }
-.summary-tbl th:first-child { text-align:left; }
-.summary-tbl td { padding:5px 8px;border-bottom:1px solid var(--border2);text-align:right; }
-.summary-tbl td:first-child { text-align:left;color:var(--text-dim);font-size:.7rem;letter-spacing:.1em; }
-.summary-tbl tr:last-child td { border-bottom:none; }
+.htbl { width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:8px; }
+.htbl th { font-family:var(--font-head);font-size:.68rem;font-weight:600;letter-spacing:.15em;color:var(--teal);padding:5px 8px;border-bottom:1px solid var(--border);text-align:right; }
+.htbl th:first-child { text-align:left; }
+.htbl td { padding:5px 8px;border-bottom:1px solid var(--border2);text-align:right; }
+.htbl td:first-child { text-align:left; }
+.htbl tr:last-child td { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -56,48 +56,56 @@ loadStats().then(data => {
   document.getElementById('page-sub').textContent = `${getCurrentSeason()} — ${halo_nites.length} HALO NITES`;
   document.getElementById('sh-nites').innerHTML = sectionHdr('SELECT A HALO NITE');
 
+  // Build timestamp lookup: game_num_season → date string
+  const tsMap = {};
+  sd.games.forEach(g => { if (g.timestamp) tsMap[g.game_num_season] = g.timestamp; });
+
+  // Players in descending alphabetical order by display name
+  const sortedPlayers = [...players].sort((a,b) => dn(b,data).localeCompare(dn(a,data)));
+
   document.getElementById('nites-list').innerHTML = [...halo_nites].reverse().map(n => {
     const gCount = n.game_count;
     const maps = n.game_log.map(g=>g.map).join(', ');
 
-    const suiHeader = combineSui
-      ? `<th class="r">BTR+SUI</th>`
-      : `<th class="r">BTR</th><th class="r">SUI</th>`;
+    // Get nite date from first game with timestamp
+    let niteDate = '';
+    for (const gl of n.game_log) {
+      const ts = tsMap[gl.game_num_season];
+      if (ts) { niteDate = ts.slice(0,10).replace(/-/g,'/'); break; }
+    }
 
-    const suiRow = (ps) => combineSui
-      ? `<td>${(ps.betrayals||0)+(ps.suicides||0)}</td>`
-      : `<td>${ps.betrayals||0}</td><td>${ps.suicides||0}</td>`;
+    function htbl(headers, cols) {
+      return `<div class="tbl-wrap" style="margin-bottom:8px"><table class="htbl">
+        <thead><tr>
+          <th>PLAYER</th>
+          ${headers.map(h=>`<th>${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${sortedPlayers.map(p => {
+            const ps = n.player_stats[p] || {};
+            const c = pc(p, data);
+            return `<tr>
+              <td><span style="color:${c};font-family:var(--font-head);font-weight:600">${dn(p,data)}</span></td>
+              ${cols.map(fn=>`<td>${fn(ps)}</td>`).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+    }
 
-    const statsRows = [
-      ['GAMES',    p=>n.player_stats[p]?.games||0],
-      ['WINS',     p=>`<span class="good">${n.player_stats[p]?.wins||0}</span>`],
-      ['LOSSES',   p=>`<span class="bad">${n.player_stats[p]?.losses||0}</span>`],
-      ['W/L',      p=>{ const v=n.player_stats[p]?.wl_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; }],
-      ['WIN%',     p=>fmtPct(n.player_stats[p]?.win_pct||0)],
-      ['SET W',    p=>n.player_stats[p]?.set_wins||0],
-      ['SET L',    p=>n.player_stats[p]?.set_losses||0],
-      ['POINTS',   p=>n.player_stats[p]?.score||0],
-      ['KILLS',    p=>n.player_stats[p]?.kills||0],
-      ['ASSISTS',  p=>n.player_stats[p]?.assists||0],
-      ['DEATHS',   p=>n.player_stats[p]?.deaths||0],
-      ['K/D',      p=>{ const v=n.player_stats[p]?.kd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; }],
-      ['KC',       p=>(n.player_stats[p]?.kc||0).toFixed(1)],
-      ['KC/D',     p=>{ const v=n.player_stats[p]?.kcd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v.toFixed(1)}</span>`; }],
-      ['AVG QIKE', p=>`<span class="teal">${(n.player_stats[p]?.avg_qike||0).toFixed(3)}</span>`],
-      ['WPN K',    p=>n.player_stats[p]?.weapon_kills||0],
-      ['GRN K',    p=>n.player_stats[p]?.grenade_kills||0],
-      ['MEL K',    p=>n.player_stats[p]?.melee_kills||0],
-      ['OTH K',    p=>n.player_stats[p]?.other_kills||0],
-      ['MEDALS',   p=>n.player_stats[p]?.medals||0],
-      ...(combineSui
-        ? [['BTR+SUI', p=>(n.player_stats[p]?.betrayals||0)+(n.player_stats[p]?.suicides||0)]]
-        : [['BETRAYALS', p=>n.player_stats[p]?.betrayals||0], ['SUICIDES', p=>n.player_stats[p]?.suicides||0]]),
-    ];
+    const wlSpread = ps => { const v=ps.wl_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; };
+    const kdr = ps => { const d=ps.deaths||0, k=ps.kills||0; return (k/(d||1)).toFixed(2); };
+    const kcdSpread = ps => { const v=ps.kcd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v.toFixed(1)}</span>`; };
+
+    const suiCols  = combineSui
+      ? [ps=>(ps.betrayals||0)+(ps.suicides||0)]
+      : [ps=>ps.betrayals||0, ps=>ps.suicides||0];
+    const suiHdrs  = combineSui ? ['BTR+SUI'] : ['BTR', 'SUI'];
 
     return `<div class="nite-card" id="nc-${n.nite_num}">
       <div class="nite-header" onclick="toggleNite(${n.nite_num})">
         <div class="nh-num">NITE ${n.nite_num}</div>
-        <div class="nh-meta">${gCount} GAMES · ${maps.substring(0,60)}${maps.length>60?'...':''}</div>
+        <div class="nh-meta">${niteDate ? niteDate + ' · ' : ''}${gCount} GAMES · ${maps.substring(0,60)}${maps.length>60?'...':''}</div>
         <div class="nh-icon" id="ni-${n.nite_num}">▶</div>
       </div>
       <div class="nite-body" id="nb-${n.nite_num}">
@@ -125,23 +133,36 @@ loadStats().then(data => {
           </table>
         </div>
 
-        <!-- Player summary table -->
+        <!-- Player summary tables -->
         <div class="sub-section">
           <h4>PLAYER SUMMARY</h4>
-          <div class="tbl-wrap">
-            <table class="summary-tbl">
-              <thead><tr>
-                <th>STAT</th>
-                ${players.map(p => `<th class="r" style="color:${pc(p,data)}">${dn(p,data)}</th>`).join('')}
-              </tr></thead>
-              <tbody>
-                ${statsRows.map(([label, valFn]) => `<tr>
-                  <td>${label}</td>
-                  ${players.map(p => `<td>${valFn(p)}</td>`).join('')}
-                </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
+          ${htbl(['W','L','W/L','WIN%','SET W','SET L'],[
+            ps=>ps.wins||0,
+            ps=>ps.losses||0,
+            wlSpread,
+            ps=>fmtPct(ps.win_pct||0),
+            ps=>ps.set_wins||0,
+            ps=>ps.set_losses||0,
+          ])}
+          ${htbl(['PTS','K','A','D','K/D','KC','KC/D','KDR'],[
+            ps=>ps.score||0,
+            ps=>ps.kills||0,
+            ps=>ps.assists||0,
+            ps=>ps.deaths||0,
+            ps=>{ const v=ps.kd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; },
+            ps=>(ps.kc||0).toFixed(1),
+            kcdSpread,
+            kdr,
+          ])}
+          ${htbl(['WPN K','GRN K','MEL K','OTH K','MEDALS',...suiHdrs,'AVG QIKE'],[
+            ps=>ps.weapon_kills||0,
+            ps=>ps.grenade_kills||0,
+            ps=>ps.melee_kills||0,
+            ps=>ps.other_kills||0,
+            ps=>ps.medals||0,
+            ...suiCols,
+            ps=>`<span class="teal">${(ps.avg_qike||0).toFixed(3)}</span>`,
+          ])}
         </div>
       </div>
     </div>`;
