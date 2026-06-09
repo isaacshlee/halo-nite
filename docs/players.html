@@ -88,7 +88,6 @@ loadStats().then(data => {
       <!-- Header -->
       <div class="plr-hdr" style="background:var(--surface);border:1px solid var(--border);border-top-color:${c}">
         <div class="name" style="color:${c}">${dn(p,data)}</div>
-        <div class="tag">${p}</div>
       </div>
 
       <!-- Avg pts/KC by team -->
@@ -284,6 +283,7 @@ loadStats().then(data => {
     // Weapons Used horizontal bar chart
     const wuLabels = WEAPONS.map(([name]) => name);
     const wuVals   = WEAPONS.map(([,fn]) => fn(medals));
+    const wuTotal  = a.total_kills || 1;
     const wuCanvas = document.getElementById(`wu-${p}`);
     if (wuCanvas) {
       new Chart(wuCanvas, {
@@ -302,6 +302,7 @@ loadStats().then(data => {
               titleColor:'#00e5ff', bodyColor:'#c8eef5',
               titleFont:{family:'Share Tech Mono',size:13},
               bodyFont:{family:'Share Tech Mono',size:12},
+              callbacks: { label: ctx => ` ${ctx.parsed.x} (${(ctx.parsed.x/wuTotal*100).toFixed(1)}% of kills)` },
             },
           },
           scales: {

@@ -60,8 +60,8 @@ loadStats().then(data => {
   const tsMap = {};
   sd.games.forEach(g => { if (g.timestamp) tsMap[g.game_num_season] = g.timestamp; });
 
-  // Players in descending alphabetical order by display name
-  const sortedPlayers = [...players].sort((a,b) => dn(b,data).localeCompare(dn(a,data)));
+  // Players in ascending alphabetical order by display name: Brundo, HD, Ike, Walsh
+  const sortedPlayers = [...players].sort((a,b) => dn(a,data).localeCompare(dn(b,data)));
 
   document.getElementById('nites-list').innerHTML = [...halo_nites].reverse().map(n => {
     const gCount = n.game_count;
@@ -136,15 +136,11 @@ loadStats().then(data => {
         <!-- Player summary tables -->
         <div class="sub-section">
           <h4>PLAYER SUMMARY</h4>
-          ${htbl(['W','L','W/L','WIN%','SET W','SET L'],[
+          ${htbl(['W','L','W/L','WIN%','PTS','K','A','D','K/D','KC','KC/D','KDR'],[
             ps=>ps.wins||0,
             ps=>ps.losses||0,
             wlSpread,
             ps=>fmtPct(ps.win_pct||0),
-            ps=>ps.set_wins||0,
-            ps=>ps.set_losses||0,
-          ])}
-          ${htbl(['PTS','K','A','D','K/D','KC','KC/D','KDR'],[
             ps=>ps.score||0,
             ps=>ps.kills||0,
             ps=>ps.assists||0,

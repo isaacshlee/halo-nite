@@ -311,46 +311,37 @@ function showMap(mn) {
   detailEl.innerHTML = `
     <div class="map-detail">
       <div class="map-detail-name">${mn}</div>
-      <div class="cards-grid" style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px">
         ${[
           {v:m.games,               l:'GAMES PLAYED'},
           {v:m.avg_mov,             l:'AVG MOV'},
           {v:mins+'m',              l:'AVG GAME TIME'},
           {v:m.avg_kills_per_player,l:'AVG KILLS/PLAYER'},
           {v:m.avg_assists_pct+'%', l:'ASSIST %'},
-          {v:offDefRatio,           l:'OFF/DEF KILL RATIO'},
+          {v:offDefRatio,           l:'OFF/DEF RATIO'},
           {v:m.avg_betray_suicide,  l:'AVG BTR+SUI'},
-        ].map(s=>`<div class="stat-card"><div class="num">${s.v}</div><div class="lbl">${s.l}</div></div>`).join('')}
+        ].map(s=>`<div style="background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--teal-dim);padding:6px 8px;text-align:center">
+          <div style="font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--teal);text-shadow:0 0 8px var(--teal-glow);line-height:1">${s.v}</div>
+          <div style="font-size:.55rem;letter-spacing:.1em;color:var(--text-dim);margin-top:3px">${s.l}</div>
+        </div>`).join('')}
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
         <div>
           <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>AVG KILLS ON MAP</span></div>
-          ${sortedP.map(p=>{ const avg=m.player_avg_kills[p]||0; const c=pc(p,data); const pct=Math.round(avg/maxKills*100);
-            return `<div class="hbar-wrap">
-              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${c};font-family:var(--font-head);font-weight:700">${avg}</span></div>
-              <div class="hbar-bg"><div class="hbar-fill" style="width:${pct}%;background:${c}"></div></div>
-            </div>`; }).join('')}
-          <div class="section-hdr"><div class="hex"></div><span>AVG POINTS ON MAP</span></div>
-          ${sortedP.map(p=>{ const avg=m.player_avg_score[p]||0; const c=pc(p,data); const pct=Math.round(avg/maxScore*100);
-            return `<div class="hbar-wrap">
-              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${c};font-family:var(--font-head);font-weight:700">${avg}</span></div>
-              <div class="hbar-bg"><div class="hbar-fill" style="width:${pct}%;background:${c}"></div></div>
-            </div>`; }).join('')}
+          <div style="position:relative;height:180px"><canvas id="detail-kills"></canvas></div>
+        </div>
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>AVG POINTS ON MAP</span></div>
+          <div style="position:relative;height:180px"><canvas id="detail-pts"></canvas></div>
         </div>
         <div>
           <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>PLAYER WIN %</span></div>
-          ${sortedP.map(p=>{ const w=m.player_win_pct[p]||0; const c=pc(p,data);
-            return `<div class="hbar-wrap">
-              <div class="hbar-label"><span class="player-tag">${playerDot(p,data)}<span style="color:${c}">${dn(p,data)}</span></span><span style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</span></div>
-              <div class="hbar-bg"><div class="hbar-fill" style="width:${w}%;background:${c}"></div></div>
-            </div>`; }).join('')}
-          <div class="section-hdr"><div class="hex"></div><span>TEAM WIN %</span></div>
-          ${mu_pairs.flat().map(tn=>{ const w=tw[tn]||0; const c=teamColor(tn,data);
-            return `<div class="hbar-wrap">
-              <div class="hbar-label">${teamBadge(tn,c)}<span style="color:${w>=50?'#4ade80':'#f87171'}">${w}%</span></div>
-              <div class="hbar-bg"><div class="hbar-fill" style="width:${w}%;background:${c}"></div></div>
-            </div>`; }).join('')}
+          <div style="position:relative;height:180px"><canvas id="detail-pwp"></canvas></div>
+        </div>
+        <div>
+          <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>TEAM WIN %</span></div>
+          <div style="position:relative;height:180px"><canvas id="detail-twp"></canvas></div>
         </div>
         <div>
           <div class="section-hdr" style="margin-top:0"><div class="hex"></div><span>KILL STYLE</span></div>
@@ -362,6 +353,37 @@ function showMap(mn) {
         </div>
       </div>
     </div>`;
+
+  // Helper for vertical bar charts in map detail
+  function detailBar(id, labels, values, colors, suffix) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ data: values, backgroundColor: colors.map(c=>c+'bb'), borderColor: colors, borderWidth: 1 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.parsed.y}${suffix||''}` } },
+        },
+        scales: {
+          x: { ticks: { color:'#9ac8d8', font:{ family:'Share Tech Mono', size:11 } }, grid:{ color:'rgba(26,58,68,.35)' } },
+          y: { ticks: { color:'#6090a2', font:{ family:'Share Tech Mono', size:11 }, callback: v => v+(suffix||'') }, grid:{ color:'rgba(26,58,68,.35)' } },
+        },
+      },
+    });
+  }
+
+  const plrLabels = sortedP.map(p => dn(p, data));
+  const plrColors = sortedP.map(p => pc(p, data));
+  detailBar('detail-kills', plrLabels, sortedP.map(p=>m.player_avg_kills[p]||0), plrColors);
+  detailBar('detail-pts',   plrLabels, sortedP.map(p=>m.player_avg_score[p]||0), plrColors);
+  detailBar('detail-pwp',   plrLabels, sortedP.map(p=>m.player_win_pct[p]||0),   plrColors, '%');
+
+  const teamLabels = mu_pairs.flat();
+  const teamColors = teamLabels.map(tn => teamColor(tn, data));
+  detailBar('detail-twp', teamLabels, teamLabels.map(tn=>tw[tn]||0), teamColors, '%');
 
   // Kill styles pie for map detail
   makePie('detail-ks',
