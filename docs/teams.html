@@ -5,8 +5,9 @@
 <title>Halo Nite — Teams</title>
 <link rel="stylesheet" href="css/halo.css">
 <style>
-.three-col-wrap { overflow-x: auto; }
+.three-col-wrap { }
 .three-col { display: grid; grid-template-columns: repeat(3, minmax(320px, 1fr)); gap: 16px; min-width: 960px; }
+@media (max-width: 960px) { .three-col-wrap { overflow-x: auto; } }
 @media (max-width: 700px) { .three-col { min-width: unset; grid-template-columns: 1fr; } }
 .mu-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .mu-header { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); position: sticky; top: 48px; z-index: 10; }
