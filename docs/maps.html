@@ -80,20 +80,26 @@ function _gradC(val, mn, mx) {
 
 function sortByMapCol(type, key) {
   if (_mapSortState && _mapSortState.type===type && _mapSortState.key===key) {
-    _mapSortState = null;
+    if (_mapSortState.order === 'desc') {
+      _mapSortState = {type, key, order: 'asc'};
+    } else {
+      _mapSortState = null;
+    }
   } else {
-    _mapSortState = {type, key};
+    _mapSortState = {type, key, order: 'desc'};
   }
   renderMapTableBodies();
 }
 
 function getSortedMapEntries() {
   if (!_mapSortState || !_mapEntries) return _mapEntries;
-  const {type, key} = _mapSortState;
+  const {type, key, order} = _mapSortState;
   const mn2 = ['Blue vs Red','Pink vs Green','Gold vs Brown'];
   return [..._mapEntries].sort((a,b) => {
     let av=0, bv=0;
-    if (type==='player') {
+    if (type==='games') {
+      av = a[1].games; bv = b[1].games;
+    } else if (type==='player') {
       av = a[1].player_win_pct[key]||0;
       bv = b[1].player_win_pct[key]||0;
     } else {
@@ -104,7 +110,7 @@ function getSortedMapEntries() {
         if (tb===key) { if(muA) av=muA.b_win_pct; if(muB) bv=muB.b_win_pct; break; }
       }
     }
-    return bv - av;
+    return order === 'asc' ? av - bv : bv - av;
   });
 }
 
@@ -168,6 +174,9 @@ function renderMapTableBodies() {
     const active = _mapSortState && th.dataset.sortType===_mapSortState.type && th.dataset.sortKey===_mapSortState.key;
     th.style.textDecoration = active ? 'underline' : '';
     th.style.opacity = active ? '1' : '';
+    const base = th.dataset.origText || th.textContent.replace(/ [▼▲]$/, '');
+    if (!th.dataset.origText) th.dataset.origText = base;
+    th.textContent = base + (active ? (_mapSortState.order === 'desc' ? ' ▼' : ' ▲') : '');
   });
 }
 
@@ -195,7 +204,7 @@ loadStats().then(data => {
 
   // ── Table headers (static, with sort click handlers) ──
   document.getElementById('tbl1-hdr').innerHTML = `<tr>
-    <th>MAP</th><th class="r">G</th>
+    <th>MAP</th><th class="r" style="cursor:pointer" data-sort-type="games" data-sort-key="games" onclick="sortByMapCol('games','games')">G</th>
     ${sortedPlayers.map(p=>`<th class="r" style="color:${pc(p,data)};cursor:pointer" data-sort-type="player" data-sort-key="${p}" onclick="sortByMapCol('player','${p}')">${dn(p,data)} W%</th>`).join('')}
   </tr>`;
   document.getElementById('tbl2-hdr').innerHTML = `<tr>

@@ -98,9 +98,20 @@
   </div>
 </div>
 </main>
+<div id="chart-modal" onclick="if(event.target===this)closeChartModal()" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:24px">
+  <div style="position:relative;background:var(--surface);border:1px solid var(--border);padding:14px;max-width:92vw;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:20px">
+      <span id="chart-modal-title" style="font-family:var(--font-head);font-size:.82rem;font-weight:600;letter-spacing:.2em;color:var(--text-dim)"></span>
+      <button onclick="closeChartModal()" style="background:none;border:none;color:var(--text-dim);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 4px;flex-shrink:0">✕</button>
+    </div>
+    <img id="chart-modal-img" style="display:block;max-width:84vw;max-height:82vh;border:1px solid var(--border)">
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/common.js"></script>
 <script>
+function closeChartModal() { document.getElementById('chart-modal').style.display = 'none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChartModal(); });
 renderNav('index.html', null);
 loadStats().then(data => {
   renderNav('index.html', data);
@@ -364,6 +375,58 @@ loadStats().then(data => {
       plugins:{legend:{position:'top',labels:{color:'#9ac8d8',font:{family:'Share Tech Mono',size:12},boxWidth:10}}},
     });
   });
+
+  // ── Chart lightbox ──
+  document.querySelectorAll('.chart-box-plr, .chart-box-team').forEach(box => {
+    box.style.cursor = 'pointer';
+    box.addEventListener('click', () => {
+      const canvas = box.querySelector('canvas');
+      if (!canvas) return;
+      document.getElementById('chart-modal-title').textContent = box.querySelector('h4')?.textContent || '';
+      document.getElementById('chart-modal-img').src = canvas.toDataURL();
+      document.getElementById('chart-modal').style.display = 'flex';
+    });
+  });
+
+  // ── Sortable tables ──
+  function makeTableSortable(table) {
+    if (typeof table === 'string') table = document.getElementById(table);
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const ths = [...table.querySelectorAll('thead th')];
+    [...tbody.querySelectorAll('tr')].forEach((r, i) => r.dataset.origIdx = i);
+    const state = new Array(ths.length).fill(null);
+    ths.forEach((th, ci) => {
+      if (ci === 0) return;
+      th.dataset.origText = th.textContent.trim();
+      th.style.cursor = 'pointer';
+      th.title = 'Click to sort';
+      th.addEventListener('click', () => {
+        const cur = state[ci];
+        state.fill(null);
+        ths.forEach(t => { if (t.dataset.origText) t.textContent = t.dataset.origText; });
+        const next = cur === null ? 'desc' : cur === 'desc' ? 'asc' : null;
+        state[ci] = next;
+        if (next) th.textContent = th.dataset.origText + (next === 'desc' ? ' ▼' : ' ▲');
+        const rows = [...tbody.querySelectorAll('tr')];
+        if (!next) {
+          rows.sort((a,b) => +a.dataset.origIdx - +b.dataset.origIdx);
+        } else {
+          rows.sort((a,b) => {
+            const av = parseFloat((a.cells[ci]?.textContent||'').trim().replace(/[^0-9.-]/g,'')) || 0;
+            const bv = parseFloat((b.cells[ci]?.textContent||'').trim().replace(/[^0-9.-]/g,'')) || 0;
+            return next === 'desc' ? bv - av : av - bv;
+          });
+        }
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+  }
+  makeTableSortable('plr-tbl1');
+  makeTableSortable('plr-tbl2');
+  makeTableSortable('plr-tbl3');
+  document.querySelectorAll('#team-tables table').forEach(t => makeTableSortable(t));
 });
 </script>
 </body>

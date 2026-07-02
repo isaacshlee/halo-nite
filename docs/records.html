@@ -121,7 +121,7 @@ loadStats().then(data => {
       const nameHtml = inst.player
         ? `<span style="color:${pc(inst.player,data)}">${playerDot(inst.player,data)}${inst.display||inst.player}</span>`
         : (inst.team ? teamBadge(inst.team, teamColor(inst.team,data)) : '—');
-      const meta = `G${inst.game_num_season} · Nite ${inst.halonite_num}${isLifetime?' · S'+inst.season:''} · ${inst.map||''}`;
+      const meta = `Game ${inst.game_num_season} · Nite ${inst.halonite_num}${isLifetime?' · S'+inst.season:''} · ${inst.map||''}`;
       return `${i>0?'<hr class="rec-divider">':''}
         <div class="rec-instance">
           <div class="rec-val" style="color:${color};text-shadow:0 0 8px ${color}44">${i===0?val:''}</div>

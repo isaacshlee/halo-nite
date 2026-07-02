@@ -9,7 +9,7 @@
 @media(max-width:1280px){ .four-col{grid-template-columns:repeat(2,1fr);} }
 @media(max-width:600px) { .four-col{grid-template-columns:1fr;} }
 .plr-col { display:flex;flex-direction:column;gap:10px;min-width:0; }
-.plr-hdr { padding:10px 14px;border-top:3px solid; }
+.plr-hdr { padding:10px 14px;border-top:3px solid;position:sticky;top:48px;z-index:10; }
 .plr-hdr .name { font-family:var(--font-head);font-size:1.3rem;font-weight:700;letter-spacing:.08em;line-height:1; }
 .plr-hdr .tag  { font-size:.66rem;letter-spacing:.15em;color:var(--text-dim);margin-top:2px; }
 .sub-label { font-family:var(--font-head);font-size:.7rem;font-weight:600;letter-spacing:.2em;color:var(--text-dim);margin-bottom:6px; }

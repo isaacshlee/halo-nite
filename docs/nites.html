@@ -42,6 +42,19 @@
 <script src="js/common.js"></script>
 <script>
 renderNav('nites.html', null);
+
+function _niteGradColor(val, min, max) {
+  const t = max === min ? 0.5 : Math.max(0, Math.min(1, (val-min)/(max-min)));
+  const r = Math.round(0xf8 + t*(0x4a-0xf8));
+  const g = Math.round(0x71 + t*(0xde-0x71));
+  const b = Math.round(0x71 + t*(0x80-0x71));
+  return `rgb(${r},${g},${b})`;
+}
+function _niteGc(vals, val, inv=false) {
+  const mn=Math.min(...vals), mx=Math.max(...vals);
+  return inv ? _niteGradColor(val,mx,mn) : _niteGradColor(val,mn,mx);
+}
+
 loadStats().then(data => {
   renderNav('nites.html', data);
   document.getElementById('loading').style.display = 'none';
@@ -74,7 +87,11 @@ loadStats().then(data => {
       if (ts) { niteDate = ts.slice(0,10).replace(/-/g,'/'); break; }
     }
 
-    function htbl(headers, cols) {
+    // colSpecs: [{valueFn, inv?, format?, htmlFn?}]
+    function htblGrad(headers, colSpecs) {
+      const numVals = colSpecs.map(spec =>
+        spec.htmlFn ? null : sortedPlayers.map(p => +spec.valueFn(n.player_stats[p]||{}) || 0)
+      );
       return `<div class="tbl-wrap" style="margin-bottom:8px"><table class="htbl">
         <thead><tr>
           <th>PLAYER</th>
@@ -86,21 +103,48 @@ loadStats().then(data => {
             const c = pc(p, data);
             return `<tr>
               <td><span style="color:${c};font-family:var(--font-head);font-weight:600">${dn(p,data)}</span></td>
-              ${cols.map(fn=>`<td>${fn(ps)}</td>`).join('')}
+              ${colSpecs.map((spec, i) => {
+                if (spec.htmlFn) return `<td>${spec.htmlFn(ps)}</td>`;
+                const rawVal = +spec.valueFn(ps) || 0;
+                const displayVal = spec.format ? spec.format(rawVal) : rawVal;
+                const color = _niteGc(numVals[i], rawVal, !!spec.inv);
+                return `<td><span style="color:${color}">${displayVal}</span></td>`;
+              }).join('')}
             </tr>`;
           }).join('')}
         </tbody>
       </table></div>`;
     }
 
-    const wlSpread = ps => { const v=ps.wl_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; };
-    const kdr = ps => { const d=ps.deaths||0, k=ps.kills||0; return (k/(d||1)).toFixed(2); };
-    const kcdSpread = ps => { const v=ps.kcd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v.toFixed(1)}</span>`; };
+    const suiSpecs = combineSui
+      ? [{ valueFn: ps=>(ps.betrayals||0)+(ps.suicides||0), inv:true }]
+      : [{ valueFn: ps=>ps.betrayals||0, inv:true }, { valueFn: ps=>ps.suicides||0, inv:true }];
+    const suiHdrs = combineSui ? ['BTR+SUI'] : ['BTR', 'SUI'];
 
-    const suiCols  = combineSui
-      ? [ps=>(ps.betrayals||0)+(ps.suicides||0)]
-      : [ps=>ps.betrayals||0, ps=>ps.suicides||0];
-    const suiHdrs  = combineSui ? ['BTR+SUI'] : ['BTR', 'SUI'];
+    const t1Specs = [
+      { valueFn: ps=>ps.wins||0 },
+      { valueFn: ps=>ps.losses||0, inv:true },
+      { valueFn: ps=>ps.wl_spread||0, format: v=>(v>0?'+':'')+v },
+      { valueFn: ps=>ps.win_pct||0, format: v=>v.toFixed(1)+'%' },
+      { valueFn: ps=>ps.score||0 },
+      { valueFn: ps=>ps.kills||0 },
+      { valueFn: ps=>ps.assists||0 },
+      { valueFn: ps=>ps.deaths||0, inv:true },
+      ...suiSpecs,
+      { valueFn: ps=>ps.avg_qike||0, format: v=>v.toFixed(3) },
+    ];
+
+    const t2Specs = [
+      { valueFn: ps=>ps.kd_spread||0, format: v=>(v>0?'+':'')+v },
+      { valueFn: ps=>ps.kc||0, format: v=>Number(v).toFixed(1) },
+      { valueFn: ps=>ps.kcd_spread||0, format: v=>(v>0?'+':'')+Number(v).toFixed(1) },
+      { valueFn: ps=>{ const d=ps.deaths||0,k=ps.kills||0; return k/(d||1); }, format: v=>v.toFixed(2) },
+      { valueFn: ps=>ps.weapon_kills||0 },
+      { valueFn: ps=>ps.grenade_kills||0 },
+      { valueFn: ps=>ps.melee_kills||0 },
+      { valueFn: ps=>ps.other_kills||0 },
+      { valueFn: ps=>ps.medals||0 },
+    ];
 
     return `<div class="nite-card" id="nc-${n.nite_num}">
       <div class="nite-header" onclick="toggleNite(${n.nite_num})">
@@ -136,29 +180,8 @@ loadStats().then(data => {
         <!-- Player summary tables -->
         <div class="sub-section">
           <h4>PLAYER SUMMARY</h4>
-          ${htbl(['W','L','W/L','WIN%','PTS','K','A','D',...suiHdrs,'AVG QIKE'],[
-            ps=>ps.wins||0,
-            ps=>ps.losses||0,
-            wlSpread,
-            ps=>fmtPct(ps.win_pct||0),
-            ps=>ps.score||0,
-            ps=>ps.kills||0,
-            ps=>ps.assists||0,
-            ps=>ps.deaths||0,
-            ...suiCols,
-            ps=>`<span class="teal">${(ps.avg_qike||0).toFixed(3)}</span>`,
-          ])}
-          ${htbl(['K/D','KC','KC/D','KDR','WPN K','GRN K','MEL K','OTH K','MEDALS'],[
-            ps=>{ const v=ps.kd_spread||0; return `<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${v}</span>`; },
-            ps=>(ps.kc||0).toFixed(1),
-            kcdSpread,
-            kdr,
-            ps=>ps.weapon_kills||0,
-            ps=>ps.grenade_kills||0,
-            ps=>ps.melee_kills||0,
-            ps=>ps.other_kills||0,
-            ps=>ps.medals||0,
-          ])}
+          ${htblGrad(['W','L','W/L','WIN%','PTS','K','A','D',...suiHdrs,'AVG QIKE'], t1Specs)}
+          ${htblGrad(['K/D','KC','KC/D','KDR','WPN K','GRN K','MEL K','OTH K','MEDALS'], t2Specs)}
         </div>
       </div>
     </div>`;

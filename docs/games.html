@@ -140,8 +140,8 @@ function buildExpandTable(g, data, isLifetime) {
     teamGroups[t].push(p);
   });
 
-  const teams = Object.keys(teamGroups);
   const wt = g.winning_team;
+  const teams = Object.keys(teamGroups).sort(a => a === wt ? -1 : 1);
   const gameNum = isLifetime ? (g.game_num_lifetime||g.game_num_season) : g.game_num_season;
   const mins = Math.floor(g.seconds_played/60), secs = g.seconds_played%60;
   const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;

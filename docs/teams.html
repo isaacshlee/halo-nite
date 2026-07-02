@@ -9,7 +9,7 @@
 .three-col { display: grid; grid-template-columns: repeat(3, minmax(320px, 1fr)); gap: 16px; min-width: 960px; }
 @media (max-width: 700px) { .three-col { min-width: unset; grid-template-columns: 1fr; } }
 .mu-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.mu-header { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); }
+.mu-header { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); position: sticky; top: 48px; z-index: 10; }
 .mu-header .mu-name { font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; letter-spacing: .1em; }
 .mu-header .mu-record { font-size: .7rem; letter-spacing: .15em; color: var(--text-dim); margin-top: 4px; }
 .inner-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--border2); }
